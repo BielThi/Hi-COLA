@@ -36,23 +36,23 @@ USE_LUA          = true
 #===================================================
 
 # Main library include (path to folder containin FML/)
-FML_INCLUDE    = $(HOME)/local/FML
+FML_INCLUDE    = $(HOME)/Hi-COLA/HiCOLA
 
 # FFTW
-FFTW_INCLUDE   = $(HOME)/local/include
-FFTW_LIB       = $(HOME)/local/lib
+FFTW_INCLUDE   = $(HOME)/miniconda3/envs/hicola/include
+FFTW_LIB       = $(HOME)/miniconda3/envs/hicola/lib
 FFTW_LINK      = -lfftw3
 FFTW_MPI_LINK  = -lfftw3_mpi
 FFTW_OMP_LINK  = -lfftw3_threads
 
 # GSL
-GSL_INCLUDE    = $(HOME)/local/include
-GSL_LIB        = $(HOME)/local/lib
+GSL_INCLUDE    = $(HOME)/miniconda3/envs/hicola/include
+GSL_LIB        = $(HOME)/miniconda3/envs/hicola/lib
 GSL_LINK       = -lgsl -lgslcblas
 
 # LUA
-LUA_INCLUDE    = $(HOME)/local/include
-LUA_LIB        = $(HOME)/local/lib
+LUA_INCLUDE    = $(HOME)/miniconda3/envs/hicola/include
+LUA_LIB        = $(HOME)/miniconda3/envs/hicola/lib
 LUA_LINK       = -llua -ldl
 
 #===================================================

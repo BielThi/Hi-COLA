@@ -1,0 +1,8 @@
+Hi-COLA_Output/
+HiCOLA/Output/
+__pycache__/
+*.py[cod]
+*.o
+HiCOLA/FML/COLASolver/nbody
+HiCOLA/*.e[0-9]*
+HiCOLA/*.o[0-9]*

@@ -254,6 +254,10 @@ namespace FML {
                 std::cout << "#=====================================================\n";
                 std::cout << "\n";
             }
+            std::cout << "Task " << FML::ThisTask << " has " << NpartLocal_in_use << " particles in use and capacity for " << p.size()
+                      << " particles. Buffer is " << fraction_filled << " %% filled. Memory allocated is " << memory_in_mb
+                      << " MB\n";
+
         }
 
         template <class T>

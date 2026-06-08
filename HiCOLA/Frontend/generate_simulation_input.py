@@ -87,6 +87,37 @@ print(f'Hubble0 = {U0}')
 print(f'scalar_prime0 = {phi_prime0}')
 
 background_quantities = ns.run_solver(read_out_dict)
+
+enforce_LCDM_background = False
+
+if enforce_LCDM_background:
+
+    # ============================================================
+    # FORCE ΛCDM BACKGROUND (Hi-COLA enforcement layer)
+    # ============================================================
+
+    a_arr = background_quantities['a']
+
+    Omega_r0, Omega_m0, Omega_l0 = read_out_dict['cosmological_parameters']
+
+    # ΛCDM H(a) = E(a)
+    E_LCDM = np.sqrt(
+        Omega_r0 * a_arr**(-4) +
+        Omega_m0 * a_arr**(-3) +
+        Omega_l0
+    )
+
+    # derivative dE/da
+    dE_da = np.gradient(E_LCDM, a_arr)
+
+    # E'/E = (dE/da)/E
+    E_prime_over_E_LCDM = dE_da / E_LCDM
+
+    # overwrite solver outputs
+    background_quantities['Hubble'] = E_LCDM * U0
+    background_quantities['Hubble_prime'] = dE_da * U0
+    background_quantities['E_prime_E'] = E_prime_over_E_LCDM
+
 a_arr = background_quantities['a']
 UE_arr = background_quantities['Hubble']
 UE_prime_arr = background_quantities['Hubble_prime']
