@@ -36,25 +36,25 @@ simulation_use_scaledependent_cola = true
 -- see Table 7 in https://arxiv.org/abs/1807.06205
 ------------------------------------------------------------
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
-cosmology_model = "HiCOLA"
+cosmology_model = "LCDM"
 --- CDM density
-cosmology_OmegaCDM = 0.26067
+cosmology_OmegaCDM = 0.319
 --- Baryon density
-cosmology_Omegab = 0.04897
+cosmology_Omegab = 0.049
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
 -- Total dark energy density
-cosmology_OmegaLambda = 0.69036
+cosmology_OmegaLambda = 0.681
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
 cosmology_TCMB_kelvin = 2.7260
 -- Hubble parameter
-cosmology_h = 0.6766
+cosmology_h = 0.67
 -- Primodial amplitude
 cosmology_As = 2.10521e-9
 -- Spectral index
-cosmology_ns = 0.9665
+cosmology_ns = 0.96
 -- Pivot scale in 1/Mpc
 cosmology_kpivot_mpc = 0.05
 
@@ -93,7 +93,7 @@ end
 -- Choose the gravity model
 ------------------------------------------------------------
 -- Gravity model: GR, DGP, f(R), JBD, Symmetron, ... add your own ...
-gravity_model = "HiCOLA"
+gravity_model = "DGP"
 
 -- HiCOLA model
 if gravity_model == "HiCOLA" then
@@ -184,9 +184,9 @@ if gravity_model == "DGP" then
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
-  gravity_model_dgp_smoothing_filter = "tophat"
+  gravity_model_dgp_smoothing_filter = "gaussian"
   -- For screening approx: smoothing scale R/boxsize
-  gravity_model_dgp_smoothing_scale_over_boxsize = 0.0 / simulation_boxsize
+  gravity_model_dgp_smoothing_scale_over_boxsize = 1.0 / simulation_boxsize
   -- Combine screeneed solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
@@ -212,16 +212,12 @@ cosmology_Omegam = cosmology_OmegaCDM + cosmology_Omegab
 cosmology_rhoc = 2.775*10.0^11 -- in Msun/h / (Mpc/h)^3
 cosmology_rhom = cosmology_Omegam * cosmology_rhoc
 
--- NEW Mass of CDM+b particles in Msun/h
-particle_mass_msunh = 1.0*10^10.3
-
 -- Number of CDM+b particles per dimension
--- particle_Npart_1D = 1024
--- NEW Number of CDM+b particles per dimension
-particle_Npart_1D = math.floor(simulation_boxsize / (particle_mass_msunh / cosmology_rhom)^(1.0/3.0) + 0.5)
--- particle_Npart_1D = 2^(math.ceil(math.log(particle_Npart_1D)/math.log(2)))
-print("particle_Npart_1D = ", particle_Npart_1D)
-particle_Npart_1D = 1024
+particle_Npart_1D = 1536
+
+-- NEW particle mass in Msun/h
+particle_mass_msunh = cosmology_rhom * simulation_boxsize^3 / particle_Npart_1D^3
+print("Particle mass in Msun/h: ", particle_mass_msunh)
 
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.5
@@ -230,20 +226,20 @@ particle_allocation_factor = 1.5
 -- Output
 ------------------------------------------------------------
 -- List of output redshifts
-output_redshifts = {0.8,0.5,0.0}
+output_redshifts = {1.65, 1.4, 1.2, 1.0, 0.5057, 0.0}
 -- Output particles?
 output_particles = true
 -- Fileformat: GADGET, FML
 output_fileformat = "GADGET"
 -- Output folder
-output_folder = "/home/biel/Hi-COLA/Hi-COLA_Output/nDGP/"
+output_folder = "/scratch/biel/nDGP/"
 
 ------------------------------------------------------------
 -- Time-stepping
 ------------------------------------------------------------
 -- Number of steps between the outputs (in output_redshifts).
 -- If only one number in the list then its the total number of steps
-timestep_nsteps = {10}
+timestep_nsteps = {30}
 -- The time-stepping method: Quinn, Tassev
 timestep_method = "Quinn"
 -- For Tassev: the nLPT parameter
@@ -283,7 +279,7 @@ ic_LPT_order = 2
 -- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA)
 ic_type_of_input = "powerspectrum"
 -- Path to the input (NB: the LCDM spectrum below is an example that comes with Hi-COLA)
-ic_input_filename = "/home/biel/Hi-COLA/HiCOLA/Parameter_files/Backend_parameter_files/LCDM_1306dot3219_matterpower_z0.000.dat"
+ic_input_filename = "/home/biel/Hi-COLA/Comparison/Bart_InitPk.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation
@@ -346,12 +342,14 @@ force_linear_massive_neutrinos = true
 -- Do halofinding every output?
 fof = false
 -- Minimum number of particles per halo
-fof_nmin_per_halo = 20
+fof_nmin_per_halo = 30
 -- The fof distance (rmin / boxsize) used when linking
-fof_linking_length = 0.2 / particle_Npart_1D
+fof_linking_length = 0.2
 -- Limit the maximum grid to use to bin particles to
 -- to speed up the fof linking. 0 means we let the code choose this
 fof_nmesh_max = 0
+-- NEW fof buffer length in Mpc/h to avoid periodicity issues when linking across the box boundaries
+fof_buffer_length_mpch = 1.0
 
 ------------------------------------------------------------
 -- Power-spectrum evaluation

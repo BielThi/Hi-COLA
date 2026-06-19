@@ -329,7 +329,7 @@ force_linear_massive_neutrinos = true
 -- Halofinding
 ------------------------------------------------------------
 -- Do halofinding every output?
-fof = false
+fof = true
 -- Minimum number of particles per halo
 fof_nmin_per_halo = 20
 -- The fof distance (rmin / boxsize) used when linking

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cuGal8_test
+#SBATCH --job-name=LCDM_reduced
 #SBATCH -o %x.out
 #SBATCH -e %x.err
 #SBATCH -N 1
@@ -17,4 +17,4 @@ export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
-time mpirun -np ${SLURM_NTASKS} /home/biel/Hi-COLA/HiCOLA/FML/COLASolver/nbody /home/biel/Hi-COLA/HiCOLA/Parameter_files/Backend_parameter_files/cuGal_test.lua
+time mpirun -np ${SLURM_NTASKS} /home/biel/Hi-COLA/HiCOLA/FML/COLASolver/nbody /home/biel/Hi-COLA/HiCOLA/Parameter_files/Backend_parameter_files/LCDM_reduced.lua

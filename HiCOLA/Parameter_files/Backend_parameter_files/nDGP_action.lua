@@ -17,9 +17,9 @@ all_parameters_must_be_in_file = false
 -- Simulation options
 ------------------------------------------------------------
 -- Label
-simulation_name = "nDGP_model"
+simulation_name = "nDGP"
 -- Boxsize of simulation in Mpc/h
-simulation_boxsize = 400.0
+simulation_boxsize = 1024.0
 
 ------------------------------------------------------------
 -- COLA
@@ -36,7 +36,7 @@ simulation_use_scaledependent_cola = true
 -- see Table 7 in https://arxiv.org/abs/1807.06205
 ------------------------------------------------------------
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
-cosmology_model = "LCDM"
+cosmology_model = "HiCOLA"
 --- CDM density
 cosmology_OmegaCDM = 0.26067
 --- Baryon density
@@ -93,7 +93,7 @@ end
 -- Choose the gravity model
 ------------------------------------------------------------
 -- Gravity model: GR, DGP, f(R), JBD, Symmetron, ... add your own ...
-gravity_model = "DGP"
+gravity_model = "HiCOLA"
 
 -- HiCOLA model
 if gravity_model == "HiCOLA" then
@@ -206,8 +206,23 @@ end
 ------------------------------------------------------------
 -- Particles
 ------------------------------------------------------------
+
+-- NEW Cosmological calculations
+cosmology_Omegam = cosmology_OmegaCDM + cosmology_Omegab
+cosmology_rhoc = 2.775*10.0^11 -- in Msun/h / (Mpc/h)^3
+cosmology_rhom = cosmology_Omegam * cosmology_rhoc
+
+-- NEW Mass of CDM+b particles in Msun/h
+particle_mass_msunh = 1.0*10^10.3
+
 -- Number of CDM+b particles per dimension
-particle_Npart_1D = 512
+-- particle_Npart_1D = 1024
+-- NEW Number of CDM+b particles per dimension
+particle_Npart_1D = math.floor(simulation_boxsize / (particle_mass_msunh / cosmology_rhom)^(1.0/3.0) + 0.5)
+-- particle_Npart_1D = 2^(math.ceil(math.log(particle_Npart_1D)/math.log(2)))
+print("particle_Npart_1D = ", particle_Npart_1D)
+particle_Npart_1D = 1024
+
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.5
 
@@ -215,20 +230,20 @@ particle_allocation_factor = 1.5
 -- Output
 ------------------------------------------------------------
 -- List of output redshifts
-output_redshifts = {0.0}
+output_redshifts = {0.8,0.5,0.0}
 -- Output particles?
 output_particles = true
 -- Fileformat: GADGET, FML
 output_fileformat = "GADGET"
 -- Output folder
-output_folder = "/home/biel/Hi-COLA/Hi-COLA_Output/nDGP_model/"
+output_folder = "/home/biel/Hi-COLA/Hi-COLA_Output/nDGP/"
 
 ------------------------------------------------------------
 -- Time-stepping
 ------------------------------------------------------------
 -- Number of steps between the outputs (in output_redshifts).
 -- If only one number in the list then its the total number of steps
-timestep_nsteps = {40}
+timestep_nsteps = {10}
 -- The time-stepping method: Quinn, Tassev
 timestep_method = "Quinn"
 -- For Tassev: the nLPT parameter

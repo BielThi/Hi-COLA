@@ -212,16 +212,12 @@ cosmology_Omegam = cosmology_OmegaCDM + cosmology_Omegab
 cosmology_rhoc = 2.775*10.0^11 -- in Msun/h / (Mpc/h)^3
 cosmology_rhom = cosmology_Omegam * cosmology_rhoc
 
--- NEW Mass of CDM+b particles in Msun/h
-particle_mass_msunh = 1.0*10^10.3
-
 -- Number of CDM+b particles per dimension
--- particle_Npart_1D = 1024
--- NEW Number of CDM+b particles per dimension
-particle_Npart_1D = math.floor(simulation_boxsize / (particle_mass_msunh / cosmology_rhom)^(1.0/3.0) + 0.5)
--- particle_Npart_1D = 2^(math.ceil(math.log(particle_Npart_1D)/math.log(2)))
-print("particle_Npart_1D = ", particle_Npart_1D)
-particle_Npart_1D = 1024
+particle_Npart_1D = 1536
+
+-- NEW particle mass in Msun/h
+particle_mass_msunh = cosmology_rhom * simulation_boxsize^3 / particle_Npart_1D^3
+print("Particle mass in Msun/h: ", particle_mass_msunh)
 
 -- Factor of how many more particles to allocate space
 particle_allocation_factor = 1.5
@@ -230,7 +226,7 @@ particle_allocation_factor = 1.5
 -- Output
 ------------------------------------------------------------
 -- List of output redshifts
-output_redshifts = {0.8,0.5,0.0}
+output_redshifts = {0.0}
 -- Output particles?
 output_particles = true
 -- Fileformat: GADGET, FML
@@ -344,14 +340,16 @@ force_linear_massive_neutrinos = true
 -- Halofinding
 ------------------------------------------------------------
 -- Do halofinding every output?
-fof = false
+fof = true
 -- Minimum number of particles per halo
-fof_nmin_per_halo = 20
+fof_nmin_per_halo = 5
 -- The fof distance (rmin / boxsize) used when linking
 fof_linking_length = 0.2 / particle_Npart_1D
 -- Limit the maximum grid to use to bin particles to
 -- to speed up the fof linking. 0 means we let the code choose this
 fof_nmesh_max = 0
+-- NEW fof buffer length in Mpc/h to avoid periodicity issues when linking across the box boundaries
+fof_buffer_length_mpch = 1.0
 
 ------------------------------------------------------------
 -- Power-spectrum evaluation
