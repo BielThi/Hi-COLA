@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
+"""Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
+
+The mass grid of the HMF is the one of the target's reference HMF at the same redshift
+(Box1, LCDM) when it exists, so both can be compared bin by bin.
+"""
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
-
-from scripts.halo_pipeline import compute_hmf, halo_catalog_to_hoddies, save_hmf_table, validate_halo_catalog
+import hicola_paths as hp
+from halo_pipeline import compute_hmf, halo_catalog_to_hoddies, save_hmf_table, validate_halo_catalog
 
 
 def default_hoddies_output(halo_catalog: Path) -> Path:
@@ -23,8 +24,8 @@ def default_hmf_output(halo_catalog: Path) -> Path:
     return halo_catalog.with_name("halos200c_hmf.txt")
 
 
-def default_mass_grid(project_dir: Path, snapshot_index: int) -> tuple[np.ndarray, str]:
-    reference = project_dir / "Comparison" / "Box1" / f"Bart_LCDM_hmf_{snapshot_index}.txt"
+def default_mass_grid(target: str, redshift: float) -> tuple[np.ndarray, str]:
+    reference = hp.reference_file(target, "LCDM", 1, redshift, "HMF")
     if reference.exists():
         return np.loadtxt(reference, comments="#")[:, 0], str(reference)
     return np.logspace(11.0, 16.0, 60), "np.logspace(11, 16, 60)"
@@ -32,15 +33,20 @@ def default_mass_grid(project_dir: Path, snapshot_index: int) -> tuple[np.ndarra
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Write HMF and HODDIES outputs from a halo catalog.")
-    parser.add_argument("--halo-catalog", required=True, type=Path)
-    parser.add_argument("--boxsize", type=float, default=1024.0)
-    parser.add_argument("--redshift", type=float, default=1.650)
-    parser.add_argument("--model", default="LCDM")
-    parser.add_argument("--project-dir", type=Path, default=Path("/home/biel/Hi-COLA"))
-    parser.add_argument("--snapshot-index", type=int, default=None)
+    parser.add_argument("--target", required=True, choices=sorted(hp.TARGETS))
+    parser.add_argument("--model", required=True, help="e.g. LCDM, nDGP_N1.2")
+    parser.add_argument("--realization", required=True, help="e.g. s1234, s1234-fixed")
+    parser.add_argument("--redshift", type=float, required=True)
+    parser.add_argument("--halo-catalog", type=Path, default=None, help="Default: from the run")
+    parser.add_argument("--boxsize", type=float, default=None, help="Default: the target's box size")
     parser.add_argument("--hmf-output", type=Path, default=None)
     parser.add_argument("--hoddies-output", type=Path, default=None)
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    run = (args.target, args.model, args.realization, args.redshift)
+    args.halo_catalog = args.halo_catalog or hp.halo_catalog_file(*run)
+    args.boxsize = args.boxsize or hp.TARGETS[args.target]["boxsize"]
+    return args
 
 
 def main() -> int:
@@ -68,19 +74,17 @@ def main() -> int:
             sort_keys=True,
         )
 
-    snapshot_index_by_redshift = {1.650: 0, 1.400: 1, 1.200: 2, 1.000: 3}
-    snapshot_index = args.snapshot_index
-    if snapshot_index is None:
-        snapshot_index = snapshot_index_by_redshift.get(round(args.redshift, 3), 0)
-
-    mass_grid, mass_grid_source = default_mass_grid(args.project_dir, snapshot_index)
+    mass_grid, mass_grid_source = default_mass_grid(args.target, args.redshift)
     hmf = compute_hmf(catalog["m200c"], volume=args.boxsize**3, mass_grid=mass_grid)
     hmf_output = args.hmf_output or default_hmf_output(args.halo_catalog)
     save_hmf_table(
         hmf,
         hmf_output,
         {
-            "label": f"Hi-COLA {args.model}",
+            "label": f"Hi-COLA {hp.simulation_name(args.target, args.model, args.realization)}",
+            "target": args.target,
+            "model": args.model,
+            "realization": args.realization,
             "catalog": str(args.halo_catalog),
             "output": str(hmf_output),
             "mass_field": "m200c",

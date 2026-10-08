@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Run the expensive nbodykit FOF halo-finding step.
 
-This script is intended to be launched with MPI, for example:
+This script is intended to be launched with MPI, normally through jobs/halo_finder.sh
+(submitted with jobs/submit_halo_finder.sh), for example:
 
-    srun -n 72 python /home/biel/Hi-COLA/scripts/run_halo_catalog.py
+    srun -n 72 python scripts/run_halo_catalog.py --target Abacus_Small --model LCDM \
+        --realization s1234 --redshift 0.5
+
+The snapshot, output file, box size, reference cosmology and minimum halo size follow from
+the run identity (see hicola_paths.py); --snapshot/--output/--boxsize/--nmin override them.
 
 It writes one flat structured NumPy halo catalog. Downstream notebooks can use
 that catalog directly for HMFs, or convert it to HODDIES' expected field names
@@ -23,22 +28,31 @@ import time
 import numpy as np
 from mpi4py import MPI
 
-
-DEFAULT_SNAPSHOT = "/scratch/biel/LCDM_Bart/snapshot_LCDM_Bart_z0.000/gadget_z0.000.*"
-DEFAULT_OUTPUT = "/scratch/biel/LCDM_Bart/halo_catalog/halos200c_catalog.npy"
+import hicola_paths as hp
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT, help="Gadget snapshot glob")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output halo catalog .npy file")
-    parser.add_argument("--boxsize", type=float, default=1024.0)
-    parser.add_argument("--redshift", type=float, default=0.0)
+    parser.add_argument("--target", required=True, choices=sorted(hp.TARGETS))
+    parser.add_argument("--model", required=True, help="e.g. LCDM, nDGP_N1.2")
+    parser.add_argument("--realization", required=True, help="e.g. s1234, s1234-fixed")
+    parser.add_argument("--redshift", type=float, required=True)
+    parser.add_argument("--snapshot", default=None, help="Gadget snapshot glob (default: from the run)")
+    parser.add_argument("--output", default=None, help="Output halo catalog .npy file (default: from the run)")
+    parser.add_argument("--boxsize", type=float, default=None, help="Default: the target's box size")
     parser.add_argument("--linking-length", type=float, default=0.2)
-    parser.add_argument("--nmin", type=int, default=50)
+    parser.add_argument("--nmin", type=int, default=None, help="Default: the target's halo_nmin")
     parser.add_argument("--mdef", default="200c")
     parser.add_argument("--particle-type", type=int, default=1)
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    run = (args.target, args.model, args.realization, args.redshift)
+    target = hp.TARGETS[args.target]
+    args.snapshot = args.snapshot or hp.snapshot_glob(*run)
+    args.output = args.output or str(hp.halo_catalog_file(*run))
+    args.boxsize = args.boxsize or target["boxsize"]
+    args.nmin = args.nmin or target["halo_nmin"]
+    return args
 
 
 def log(comm: MPI.Comm, message: str) -> None:
@@ -164,13 +178,13 @@ def main() -> int:
     particle_mass = particle_mass_code * 1.0e10
     log(comm, f"Particle mass from Gadget header: {particle_mass_code} x 1e10 Msun/h")
 
-    from euclid_reference_cosmology import EUCLID, SERIALIZABLE_PARAMETERS, ns
     from nbodykit.algorithms.fof import FOF
     from nbodykit.cosmology.cosmology import Cosmology
     from nbodykit.lab import Gadget1Catalog
 
-    euclid = Cosmology.from_astropy(EUCLID, n_s=ns)
-    log(comm, f"Using Euclid reference cosmology: {SERIALIZABLE_PARAMETERS}")
+    reference = hp.reference_cosmology(args.target)
+    cosmology = Cosmology.from_astropy(reference.get_cosmology(), n_s=reference.ns)
+    log(comm, f"Using {reference.SOURCE} reference cosmology: {reference.SERIALIZABLE_PARAMETERS}")
 
     log(comm, "Opening Gadget catalog")
     gadget = Gadget1Catalog(args.snapshot, comm=comm)
@@ -183,7 +197,7 @@ def main() -> int:
     log(comm, f"Converting FOF groups to HaloCatalog with mdef={args.mdef}")
     halos = fof.to_halos(
         particle_mass=particle_mass,
-        cosmo=euclid,
+        cosmo=cosmology,
         redshift=args.redshift,
         mdef=args.mdef,
     )
@@ -215,8 +229,11 @@ def main() -> int:
             "particle_type": args.particle_type,
             "particle_mass_code_units": particle_mass_code,
             "particle_mass_msun_h": particle_mass,
-            "cosmology": SERIALIZABLE_PARAMETERS,
-            "cosmology_source": "Euclid preparation: VII, arXiv:1910.09273",
+            "target": args.target,
+            "model": args.model,
+            "realization": args.realization,
+            "cosmology": reference.SERIALIZABLE_PARAMETERS,
+            "cosmology_source": reference.SOURCE,
             "schema": "flat halo catalog",
             "mass_field": "m200c",
             "mass_units": "Msun/h",

@@ -21,6 +21,8 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 
 
+SOURCE = "AbacusSummit c000 (Planck2018), https://abacussummit.readthedocs.io/en/latest/cosmologies.html"
+
 h = 0.6736
 H0 = 100.0 * h * u.km / u.s / u.Mpc
 Omega_cdm = 0.265890

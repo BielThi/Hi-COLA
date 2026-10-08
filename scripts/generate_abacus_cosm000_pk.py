@@ -25,17 +25,16 @@ extrapolation needed at the edges of the range HiCOLA will actually use.
 
 Run this in the `hicola` conda env (it has cosmoprimo + classy installed):
     conda activate hicola
-    python generate_abacus_cosm000_pk.py
+    python scripts/generate_abacus_cosm000_pk.py
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-OUTPUT_PATH = (
-    "/home/biel/Hi-COLA/HiCOLA/Parameter_files/Backend_parameter_files/"
-    "abacus_cosm000_pk_cb_z0.000.dat"
-)
+import hicola_paths as hp
+
+OUTPUT_PATH = hp.BACKEND_PARAM_DIR / "abacus_cosm000_pk_cb_z0.000.dat"
 
 # Expected sigma8_cb(z=0) for abacus_cosm000, from cosmoprimo's abacus_cosmologies.csv.
 # Used only as a sanity check on the file we just wrote (see verify_sigma8 below).

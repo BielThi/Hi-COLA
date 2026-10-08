@@ -14,6 +14,8 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 
 
+SOURCE = "Euclid preparation: VII, arXiv:1910.09273"
+
 h = 0.67
 H0 = 100.0 * h * u.km / u.s / u.Mpc
 Omega_cdm = 0.270

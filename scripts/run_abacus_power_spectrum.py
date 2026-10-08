@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compute the Abacus matter power spectrum from a CompaSOHaloCatalog subsample.
 
-Intended to be launched as a batch job (see power_spectrum_abacus.sh) rather than run
+Intended to be launched as a batch job (see jobs/power_spectrum_abacus.sh) rather than run
 inline in a notebook: loading the halo catalog and painting the full particle subsample
 onto a mesh needs several GB, more than is comfortably available on a shared login-node
 session.
@@ -29,6 +29,8 @@ import time
 
 import numpy as np
 
+import hicola_paths as hp
+
 
 def log(message: str) -> None:
     elapsed = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -37,7 +39,12 @@ def log(message: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--path-to-sim", required=True, help="CompaSOHaloCatalog redshift directory")
+    parser.add_argument("--redshift", type=float, default=0.5, help="Used for the default --path-to-sim")
+    parser.add_argument(
+        "--path-to-sim",
+        default=None,
+        help="CompaSOHaloCatalog redshift directory (default: the Abacus_Small raw data at --redshift)",
+    )
     parser.add_argument("--load-A", type=int, choices=(0, 1), default=1, help="Load subsample A (3%%)")
     parser.add_argument("--load-B", type=int, choices=(0, 1), default=0, help="Load subsample B (7%%)")
     parser.add_argument("--nmesh", type=int, default=512)
@@ -55,11 +62,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nthread", type=int, default=None, help="Default: all available cores")
     parser.add_argument("--model", default="LCDM")
     parser.add_argument(
-        "--output-dir",
-        default="/home/biel/Hi-COLA/Comparison/Abacus1",
-        help="Directory to write Abacus_<model>_z<redshift>.txt (and .json metadata) into",
+        "--output",
+        default=None,
+        help=(
+            "Output file (and .json metadata next to it). Default: the Abacus_Small reference "
+            "file Abacus_Small_<model>_Box1_z<redshift>_PS.txt"
+        ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.path_to_sim = args.path_to_sim or str(hp.abacus_halo_dir(args.redshift))
+    return args
 
 
 def main() -> int:
@@ -146,8 +158,8 @@ def main() -> int:
     Pk = np.asarray(binned["power"]) - Pk_shot
     log("Binning done")
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    out_path = os.path.join(args.output_dir, f"Abacus_{args.model}_z{header['Redshift']:.3f}.txt")
+    out_path = args.output or str(hp.reference_file("Abacus_Small", args.model, 1, header["Redshift"], "PS"))
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     h = header["H0"] / 100.0
     header_lines = [
