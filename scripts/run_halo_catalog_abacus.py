@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Run the expensive nbodykit FOF/HaloCatalog step for HOD.ipynb.
+"""Run the expensive nbodykit FOF halo-finding step.
 
 This script is intended to be launched with MPI, for example:
 
-    srun -n 72 python /home/biel/Hi-COLA/scripts/run_hod_fof.py
+    srun -n 72 python /home/biel/Hi-COLA/scripts/run_halo_catalog_abacus.py
 
-It writes a structured NumPy array with the same fields that the notebook's
-HODDIES setup expects.
+It writes one flat structured NumPy halo catalog. Downstream notebooks can use
+that catalog directly for HMFs, or convert it to HODDIES' expected field names
+when running HOD models.
 """
 
 from __future__ import annotations
@@ -23,15 +24,15 @@ import numpy as np
 from mpi4py import MPI
 
 
-DEFAULT_SNAPSHOT = "/scratch/biel/LCDM_Bart/snapshot_LCDM_Bart_z0.000/gadget_z0.000.*"
-DEFAULT_OUTPUT = "/scratch/biel/LCDM_Bart/hod_fof/halos200c_hod_arr.npy"
+DEFAULT_SNAPSHOT = "/scratch/biel/LCDM_Abacus/snapshot_LCDM_Abacus_z0.500/gadget_z0.500.*"
+DEFAULT_OUTPUT = "/scratch/biel/LCDM_Abacus/snapshot_LCDM_Abacus_z0.500/halo_catalog/halos200c_catalog.npy"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT, help="Gadget snapshot glob")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output .npy file")
-    parser.add_argument("--boxsize", type=float, default=1024.0)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output halo catalog .npy file")
+    parser.add_argument("--boxsize", type=float, default=500.0)
     parser.add_argument("--redshift", type=float, default=0.0)
     parser.add_argument("--linking-length", type=float, default=0.2)
     parser.add_argument("--nmin", type=int, default=50)
@@ -71,10 +72,10 @@ def read_particle_mass(snapshot_glob: str, particle_type: int) -> float:
     return float(massarr[particle_type])
 
 
-def compute_local_hod_array(halos) -> np.ndarray:
-    mass = halos["Mass"].compute()
+def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray, boxsize: float) -> np.ndarray:
     position = halos["Position"].compute()
     velocity = halos["Velocity"].compute()
+    mass = halos["Mass"].compute()
     radius = halos["Radius"].compute()
     concentration = halos["Concentration"].compute()
 
@@ -85,28 +86,35 @@ def compute_local_hod_array(halos) -> np.ndarray:
         ("vx", "f8"),
         ("vy", "f8"),
         ("vz", "f8"),
-        ("Mh", "f8"),
-        ("log10_Mh", "f8"),
-        ("Rh", "f8"),
-        ("Rs", "f8"),
+        ("m200c", "f8"),
+        ("log10_m200c", "f8"),
+        ("r200c", "f8"),
+        ("rs", "f8"),
         ("c", "f8"),
-        ("Vrms", "f8"),
+        ("vrms", "f8"),
+        ("length", "i8"),
         ("halo_id", "i8"),
     ]
 
     arr = np.zeros(len(mass), dtype=dtype)
-    arr["x"], arr["y"], arr["z"] = position.T
+    # nbodykit's FOF center-of-mass wraps positions into [0, boxsize) in
+    # float64 but stores them as float32, so values within float32 precision
+    # of the upper edge (e.g. 1023.9999998) round up to exactly `boxsize`.
+    # Re-wrap after upcasting to float64 to keep positions strictly in range.
+    arr["x"], arr["y"], arr["z"] = (position.T.astype("f8")) % boxsize
     arr["vx"], arr["vy"], arr["vz"] = velocity.T
-    arr["Mh"] = mass
-    arr["log10_Mh"] = np.log10(mass)
-    arr["Rh"] = 1000.0 * radius
+    arr["m200c"] = mass
+    arr["log10_m200c"] = np.log10(mass)
+    arr["r200c"] = 1000.0 * radius
     arr["c"] = concentration
-    arr["Rs"] = arr["Rh"] / concentration
+    arr["rs"] = arr["r200c"] / concentration
+    arr["vrms"] = vrms
+    arr["length"] = length
     return arr
 
 
-def compute_local_fof_vrms(fof, source, local_size: int) -> np.ndarray:
-    """Compute HODDIES' 3D per-halo RMS velocity from FOF particle labels."""
+def compute_local_fof_stats(fof, source, local_size: int) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-halo FoF member counts and 3D RMS velocity."""
     comm = fof.comm
     labels = np.asarray(fof.labels)
     velocity = np.asarray(source.compute(source["Velocity"]), dtype="f8")
@@ -132,11 +140,13 @@ def compute_local_fof_vrms(fof, source, local_size: int) -> np.ndarray:
 
     variance_3d = np.maximum(np.sum(mean_v2 - mean_v**2, axis=1), 0.0)
     vrms = np.sqrt(variance_3d)
+    length = count.astype("i8")
 
     # nbodykit's halo catalog drops label 0 and scatters the remaining labels
-    # evenly across ranks, so slice the global Vrms array with the local offset.
+    # evenly across ranks, so slice the global arrays with the local offset.
     local_start = sum(comm.allgather(local_size)[: comm.rank])
-    return vrms[1:][local_start : local_start + local_size]
+    local_slice = slice(local_start, local_start + local_size)
+    return vrms[1:][local_slice], length[1:][local_slice]
 
 
 def main() -> int:
@@ -147,19 +157,20 @@ def main() -> int:
     os.environ.setdefault("MKL_NUM_THREADS", "1")
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-    log(comm, f"Starting HOD FOF on {comm.size} MPI ranks")
+    log(comm, f"Starting FOF halo finding on {comm.size} MPI ranks")
     log(comm, f"Snapshot: {args.snapshot}")
 
     particle_mass_code = read_particle_mass(args.snapshot, args.particle_type)
     particle_mass = particle_mass_code * 1.0e10
     log(comm, f"Particle mass from Gadget header: {particle_mass_code} x 1e10 Msun/h")
 
-    from astropy.cosmology import Planck18
+    from abacus_reference_cosmology import ABACUS, SERIALIZABLE_PARAMETERS, ns
     from nbodykit.algorithms.fof import FOF
     from nbodykit.cosmology.cosmology import Cosmology
     from nbodykit.lab import Gadget1Catalog
 
-    planck18 = Cosmology.from_astropy(Planck18)
+    abacus = Cosmology.from_astropy(ABACUS, n_s=ns)
+    log(comm, f"Using AbacusSummit c000 (Planck18) reference cosmology: {SERIALIZABLE_PARAMETERS}")
 
     log(comm, "Opening Gadget catalog")
     gadget = Gadget1Catalog(args.snapshot, comm=comm)
@@ -172,14 +183,15 @@ def main() -> int:
     log(comm, f"Converting FOF groups to HaloCatalog with mdef={args.mdef}")
     halos = fof.to_halos(
         particle_mass=particle_mass,
-        cosmo=planck18,
+        cosmo=abacus,
         redshift=args.redshift,
         mdef=args.mdef,
     )
 
     log(comm, "Computing local halo fields")
-    local_arr = compute_local_hod_array(halos)
-    local_arr["Vrms"] = compute_local_fof_vrms(fof, gadget, len(local_arr))
+    local_size = len(halos["Mass"].compute())
+    local_vrms, local_length = compute_local_fof_stats(fof, gadget, local_size)
+    local_arr = compute_local_halo_catalog_array(halos, local_vrms, local_length, args.boxsize)
     local_count = np.array(len(local_arr), dtype="i8")
     offsets = np.cumsum([0] + comm.allgather(int(local_count)))[:-1]
     local_arr["halo_id"] = np.arange(offsets[comm.rank], offsets[comm.rank] + len(local_arr), dtype="i8")
@@ -203,12 +215,18 @@ def main() -> int:
             "particle_type": args.particle_type,
             "particle_mass_code_units": particle_mass_code,
             "particle_mass_msun_h": particle_mass,
+            "cosmology": SERIALIZABLE_PARAMETERS,
+            "cosmology_source": "AbacusSummit c000 (Planck2018), https://abacussummit.readthedocs.io/en/latest/cosmologies.html",
+            "schema": "flat halo catalog",
+            "mass_field": "m200c",
             "mass_units": "Msun/h",
             "radius_units": "kpc/h",
+            "position_units": "Mpc/h",
             "velocity_units": "km/s",
-            "Vrms_definition": "sqrt(sum_i(<v_i^2> - <v_i>^2)) over FOF member particles",
+            "vrms_definition": "sqrt(sum_i(<v_i^2> - <v_i>^2)) over FOF member particles",
             "mpi_ranks": comm.size,
             "halos": int(len(arr)),
+            "fields": list(arr.dtype.names),
         }
         with open(args.output + ".json", "w", encoding="utf-8") as handle:
             json.dump(metadata, handle, indent=2, sort_keys=True)

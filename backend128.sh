@@ -13,6 +13,9 @@
 source /home/biel/miniconda3/etc/profile.d/conda.sh
 conda activate hicola
 
+export TMPDIR=/tmp/biel_${SLURM_JOB_ID}
+mkdir -p "$TMPDIR"
+
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1

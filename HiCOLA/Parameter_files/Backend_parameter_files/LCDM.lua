@@ -38,7 +38,7 @@ simulation_use_scaledependent_cola = true
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
-cosmology_OmegaCDM = 0.319
+cosmology_OmegaCDM = 0.270
 --- Baryon density
 cosmology_Omegab = 0.049
 -- Massive neutrino density
@@ -226,7 +226,7 @@ particle_allocation_factor = 1.5
 -- Output
 ------------------------------------------------------------
 -- List of output redshifts
-output_redshifts = {1.65, 1.4, 1.2, 1.0, 0.5057, 0.0}
+output_redshifts = {1.65,1.4,1.2,1.0}
 -- Output particles?
 output_particles = true
 -- Fileformat: GADGET, FML
@@ -330,7 +330,7 @@ force_kernel = "continuous_greens_function"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))
-force_linear_massive_neutrinos = true
+force_linear_massive_neutrinos = false
 
 ------------------------------------------------------------
 -- On the fly analysis

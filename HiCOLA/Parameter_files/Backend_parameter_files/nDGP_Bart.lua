@@ -38,7 +38,7 @@ simulation_use_scaledependent_cola = true
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
-cosmology_OmegaCDM = 0.319
+cosmology_OmegaCDM = 0.270
 --- Baryon density
 cosmology_Omegab = 0.049
 -- Massive neutrino density
@@ -175,7 +175,7 @@ end
 -- For the self accelerating branch rcH0 must have a negative sign
 if gravity_model == "DGP" then
   -- The cross-over scale rc*H0/c
-  gravity_model_dgp_rcH0overc = 1.0
+  gravity_model_dgp_rcH0overc = 1.2
   -- Solve exact DGP equation using the multigridsolver (slow and mainly for testing)
   -- This option takes precedent over the approximate screening model below if both are set
   -- NB: this is not always easy to get to work, its a tricky equation, and might saturate at
@@ -220,13 +220,13 @@ particle_mass_msunh = cosmology_rhom * simulation_boxsize^3 / particle_Npart_1D^
 print("Particle mass in Msun/h: ", particle_mass_msunh)
 
 -- Factor of how many more particles to allocate space
-particle_allocation_factor = 3.5
+particle_allocation_factor = 1.5
 
 ------------------------------------------------------------
 -- Output
 ------------------------------------------------------------
 -- List of output redshifts
-output_redshifts = {1.65, 1.4, 1.2, 1.0, 0.5057, 0.0}
+output_redshifts = {1.65, 1.4, 1.2, 1.0}
 -- Output particles?
 output_particles = true
 -- Fileformat: GADGET, FML
@@ -283,7 +283,7 @@ ic_input_filename = "/home/biel/Hi-COLA/Comparison/Bart_InitPk.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation
-ic_initial_redshift = 49.0
+ic_initial_redshift = 19.0
 -- Normalize wrt sigma8? Otherwise use normalization in input + As etc.
 -- If ic_use_gravity_model_GR then this is the sigma8 value is a corresponding GR universe!
 ic_sigma8_normalization = false
@@ -322,7 +322,7 @@ end
 -- Force calculation
 ------------------------------------------------------------
 -- Grid to use for computing PM forces
-force_nmesh = 1*particle_Npart_1D
+force_nmesh = 3 * particle_Npart_1D
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 force_density_assignment_method = "CIC"
 -- The kernel to use when solving the Poisson equation
@@ -330,7 +330,7 @@ force_kernel = "continuous_greens_function"
 -- Include the effects of massive neutrinos when computing
 -- the density field (density of mnu is the linear prediction)
 -- Requires: transferinfofile above (we need all T(k,z))
-force_linear_massive_neutrinos = true
+force_linear_massive_neutrinos = false
 
 ------------------------------------------------------------
 -- On the fly analysis
@@ -340,9 +340,9 @@ force_linear_massive_neutrinos = true
 -- Halofinding
 ------------------------------------------------------------
 -- Do halofinding every output?
-fof = true
+fof = false
 -- Minimum number of particles per halo
-fof_nmin_per_halo = 50
+fof_nmin_per_halo = 30
 -- The fof distance (rmin / boxsize) used when linking
 fof_linking_length = 0.2
 -- Limit the maximum grid to use to bin particles to
