@@ -51,9 +51,9 @@ always with the same defaults. Export one before running to change it.
 (with MPI and threads), GSL, Lua and an MPI compiler, used to build the backend.
 The job scripts activate it themselves (`$HICOLA_CONDA_ENV`, default `hicola`).
 
-**Backend binary** `HiCOLA/FML/COLASolver/nbody`, built with `make` in that folder. The
-Makefile takes FFTW, GSL and Lua from `$(HOME)/miniconda3/envs/hicola` and FML from
-`$(HOME)/Hi-COLA/HiCOLA`; change those lines if the env or the repository is elsewhere.
+**Backend binary** `HiCOLA/FML/COLASolver/nbody`, built with `make` in that folder with the
+`hicola` env activated: the Makefile takes FFTW, GSL and Lua from the active env
+(`$(CONDA_PREFIX)`) and FML from the clone it is in, so every clone builds against its own code.
 
 **HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository. The HOD
 notebooks import it from there (`$HODDIES_ROOT`), not from the `HODDIES` package installed
@@ -246,7 +246,7 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 
 1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` into the same folder and copy
    `hicola_data/` next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
-2. Create the `hicola` env (section 2), build `nbody`, run `nbstripout --install`.
+2. Create the `hicola` env (section 2), build `nbody` with it activated, run `nbstripout --install`.
 3. Export `HICOLA_RUN_ROOT` if the scratch path is not `/scratch/$USER`, and adapt the
    `#SBATCH` lines in `jobs/*.sh` (partition, cores per node, `--exclusive`) to the cluster.
 4. Check with a small run, e.g. a copy of a run file with `particle_Npart_1D = 192`,
