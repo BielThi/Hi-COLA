@@ -1,100 +1,252 @@
 # Comparison pipeline
 
-How this fork runs Hi-COLA against reference simulations: Hi-COLA backend → FoF halos
-(nbodykit) → HMF / HODDIES → comparison notebooks. Hi-COLA itself (`HiCOLA/`) keeps its
-original layout and file names; this file only covers what was added around it.
+This fork runs Hi-COLA simulations matched to reference simulations and compares their
+matter power spectra, halo mass functions and HOD galaxies:
 
-## Where things live
+```
+frontend (optional)     backend (Hi-COLA)        halo finder (nbodykit)      analysis
+.ini → expansion/force  run.lua → snapshots,     FoF → M200c catalog →       notebooks: P(k), HMF,
+tables                  P(k) at each output z    HMF + HODDIES halo array    HOD / LRG mocks
+```
 
-| what | where | |
+Hi-COLA itself (`HiCOLA/`) keeps its original layout and file names. Everything described
+here was added around it: `jobs/`, `scripts/`, `Notebooks/`, and the run files in
+`HiCOLA/Parameter_files/Backend_parameter_files/`.
+
+## 1. Where things live
+
+```
+~/                                  (any parent folder works, see section 9)
+├── Hi-COLA/                        this repository                          $HICOLA_ROOT
+│   ├── HiCOLA/                     Hi-COLA code (frontend, FML backend), original layout
+│   │   ├── Output/                 frontend tables, job logs (not in git)
+│   │   └── Parameter_files/        frontend .ini and backend .lua files
+│   ├── jobs/                       SLURM jobs and their submit scripts
+│   ├── scripts/                    Python pipeline code (paths, halo finder, measurements)
+│   ├── Notebooks/                  analysis notebooks and HOD parameter files
+│   └── PIPELINE.md                 this file
+├── HODDIES/                        HOD code, imported by the HOD notebooks     $HODDIES_ROOT
+└── hicola_data/                    reference data + kept measurements          $HICOLA_DATA_ROOT
+    (see hicola_data/README.md)
+
+/scratch/$USER/Hi-COLA_Output/      simulation outputs (snapshots, halo catalogs) $HICOLA_RUN_ROOT
+```
+
+| what | where | backed up? |
 |---|---|---|
-| code, parameter files, notebooks | this repository (`$HICOLA_ROOT`) | git |
-| frontend tables, job logs | `HiCOLA/Output/` (Hi-COLA's own output folder) | not in git |
-| simulation outputs | `$HICOLA_RUN_ROOT` = `/scratch/$USER/Hi-COLA_Output` | cleaned up automatically |
-| reference data, kept measurements | `$HICOLA_DATA_ROOT` = `../hicola_data` | see its README.md |
+| code, run files, notebooks | `Hi-COLA/` | git (GitHub `BielThi/Hi-COLA`) |
+| frontend tables, job logs | `Hi-COLA/HiCOLA/Output/` | no (regenerable) |
+| snapshots, P(k) per time step, halo catalogs | `$HICOLA_RUN_ROOT` on scratch, ~85 GB per run | no: scratch is cleaned up automatically |
+| reference simulations, kept P(k)/HMF of each run | `hicola_data/` | home |
 
-The three variables are set in `jobs/hicola_env.sh` and read by the Lua files
-(`Backend_parameter_files/common.lua`) and the Python code (`scripts/hicola_paths.py`).
-Export one before running to change it, e.g. on another cluster.
+The four variables are set in `jobs/hicola_env.sh` and read by the Lua files
+(`Backend_parameter_files/common.lua`) and the Python code (`scripts/hicola_paths.py`),
+always with the same defaults. Export one before running to change it.
 
-## Runs
+## 2. Software setup
 
-A run is matched to a reference simulation (`target`) and named by a model and a realization:
+**Conda env `hicola`** (Python 3.11). Main packages: `nbodykit` (FoF, P(k)), `mpi4py`,
+`abacusutils` (Abacus catalogs), `cosmoprimo` + `pyclass` (CLASS), `numba`, `fitsio`,
+`pynbody`, `astropy`, `sympy` + `configobj` (frontend), `jupyter`, `nbstripout`, plus FFTW
+(with MPI and threads), GSL, Lua and an MPI compiler, used to build the backend.
+The job scripts activate it themselves (`$HICOLA_CONDA_ENV`, default `hicola`).
+
+**Backend binary** `HiCOLA/FML/COLASolver/nbody`, built with `make` in that folder. The
+Makefile takes FFTW, GSL and Lua from `$(HOME)/miniconda3/envs/hicola` and FML from
+`$(HOME)/Hi-COLA/HiCOLA`; change those lines if the env or the repository is elsewhere.
+
+**HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository. The HOD
+notebooks import it from there (`$HODDIES_ROOT`), not from the `HODDIES` package installed
+in the env, which is a different copy. The clone used so far has uncommitted changes:
+numba `parallel` turned off in `HODDIES/utils.py` and the custom-cosmology line commented
+out in `HODDIES/hod.py`. Commit them to the fork to make the HOD results reproducible
+elsewhere.
+
+**hi_class**: the env's `classy` was built from `~/hi_class_public`
+(`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline imports it any
+more (CLASS is used through cosmoprimo/`pyclass`), so it is not needed on a new machine.
+
+**nbstripout** removes notebook outputs from what git stores (the files on disk keep
+them). It is registered in `.gitattributes`; each new clone has to run it once:
+
+```bash
+conda activate hicola && nbstripout --install
+```
+
+## 3. Runs and their names
+
+A run is matched to a reference simulation (the **target**: same box, cosmology and initial
+P(k)) and named by a **model** and a **realization**:
+
+| | values |
+|---|---|
+| target | `COLA_NM4096` (1024 Mpc/h, Euclid cosmology, Bart's initial P(k), z = 1.65, 1.4, 1.2, 1.0) · `Abacus_Small` (500 Mpc/h, AbacusSummit c000, z = 1.1, 0.8, 0.5) |
+| model | `LCDM` · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = DGP with rc·H0/c = 1.2 (Hi-COLA's built-in DGP) |
+| realization | `s<seed>` · `s<seed>-fixed` (fixed amplitude) · `s<seed>-fixed-inv` (fixed amplitude, reversed phases) |
 
 ```
 HiCOLA/Parameter_files/Backend_parameter_files/
-├── common.lua                         naming scheme and paths
-├── COLA_NM4096/base.lua               1024 Mpc/h, Euclid cosmology, Bart's initial P(k), z = 1.65 ... 1.0
+├── Hi-COLA_params.lua            original Hi-COLA template
+├── LCDM_1306dot3219_matterpower_z0.000.dat   original Hi-COLA example P(k) (σ8 ≈ 0.92, testing only)
+├── common.lua                    naming scheme and paths, loaded by every run file
+├── Initial_power_spectra/        Bart_InitPk.txt (COLA_NM4096), abacus_cosm000_pk_cb_z0.000.dat (Abacus_Small)
+├── COLA_NM4096/base.lua          all settings shared by the COLA_NM4096 runs
 ├── COLA_NM4096/<model>_<realization>.lua
-├── Abacus_Small/base.lua              500 Mpc/h, AbacusSummit c000, z = 1.1, 0.8, 0.5
+├── Abacus_Small/base.lua
 ├── Abacus_Small/<model>_<realization>.lua
-├── standalone/*.lua                   other runs (tests, cubic Galileon, ...), not matched to a reference
-└── Hi-COLA_params.lua                 original Hi-COLA template
+└── standalone/                   runs not matched to a reference, kept as examples:
+    ├── cuGal.lua                 cubic Galileon through the frontend (gravity_model = "HiCOLA")
+    └── nDGP_action.lua           nDGP from its Horndeski action through the frontend
 ```
 
-- `model`: `LCDM` or `nDGP_N<rcH0>` (e.g. `nDGP_N1.2` → DGP with rc·H0/c = 1.2)
-- `realization`: `s<seed>`, `s<seed>-fixed` (fixed amplitude), `s<seed>-fixed-inv`
-  (fixed amplitude, reversed phases)
+A run file only sets `model` and `realization` and loads `base.lua`. To add a run, copy a
+run file and change the two names; settings that should differ from the base (e.g. a higher
+resolution) go after the `dofile` line, together with whatever the base derives from them
+(`ic_nmesh`, `force_nmesh`, `pofk_nmesh`, ...).
 
-A run file only sets these two and loads `base.lua`; all runs of a target share every other
-setting. To add a run, copy a run file and change the names; overrides go after the `dofile`.
-
-`simulation_name` is `<target>_<model>_<realization>` and the output folder is
-`$HICOLA_RUN_ROOT/<target>/<model>/<realization>/`, where Hi-COLA writes its usual files:
+Every run gets `simulation_name = <target>_<model>_<realization>` and writes Hi-COLA's usual
+files to `$HICOLA_RUN_ROOT/<target>/<model>/<realization>/`:
 
 ```
-pofk_<simulation_name>_cb_z<z>.txt          every time step
+pofk_<simulation_name>_cb_z<z>.txt         P_cb(k) and linear P(k) at every time step
 gravitymodel_<simulation_name>_k*.txt, cosmology_<simulation_name>.txt
-snapshot_<simulation_name>_z<z>/
-├── gadget_z<z>.*, pofk_z<z>.txt            output redshifts
-└── halo_catalog/halos200c_{catalog.npy,hmf.txt,hoddies.npy}   from the halo finder
+snapshot_<simulation_name>_z<z>/           one per output redshift
+├── gadget_z<z>.*                          particles (Gadget format)
+├── pofk_z<z>.txt                          P(k) of the snapshot: this is the "PS" that is kept
+└── halo_catalog/                          written by the halo finder
+    ├── halos200c_catalog.npy (+ .json)    FoF halos, M200c, positions, velocities, concentration
+    ├── halos200c_hmf.txt (+ .json)        HMF: this is the "HMF" that is kept
+    └── halos200c_hoddies.npy (+ .json)    halo array in HODDIES' format
 ```
 
-## Running
+Standalone runs write to `$HICOLA_RUN_ROOT/standalone/<file name>/` and keep their own
+`simulation_name`. They need frontend tables in `HiCOLA/Output/` (section 4), which are not
+in git.
 
-From the repository, with the `hicola` conda env available (the scripts activate it):
+## 4. Running
+
+From the repository folder. Extra arguments go to `sbatch`; the defaults in the `#SBATCH`
+lines of the job scripts are the production settings on jed (academic partition).
 
 ```bash
-# backend; extra arguments go to sbatch
+# backend (default 8 nodes, 512 tasks, 5 h)
 jobs/submit_backend.sh HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua
 jobs/submit_backend.sh <run.lua> -N 2 -n 128 --time=1:00:00
 
-# halo finder + HMF + HODDIES array, one job per output redshift (or give one redshift)
+# halo finder: FoF + HMF + HODDIES array, one job per output redshift (or give one redshift)
 jobs/submit_halo_finder.sh <run.lua>
 jobs/submit_halo_finder.sh <run.lua> 0.5 --dependency=afterok:<backend job id>
 
-# Abacus_Small reference P(k) (edit the parameters in jobs/power_spectrum_abacus.sh)
+# Abacus_Small reference P(k) (parameters at the top of jobs/power_spectrum_abacus.sh)
 jobs/submit_power_spectrum_abacus.sh
 
-# frontend (writes to HiCOLA/Output/)
-jobs/frontend.sh <model.ini> <cosmology.ini>
+# frontend: writes <model>_<cosmology>_{expansion,force}.txt to HiCOLA/Output/
+jobs/frontend.sh HiCOLA/Parameter_files/Frontend_parameter_files/examples/cubic_Galileon/cuGal_f0p2.ini \
+                 HiCOLA/Parameter_files/Frontend_parameter_files/examples/WMAP_cosmological_parameters.ini
 ```
 
-Logs go to `HiCOLA/Output/COLA/<target>/<model>/<realization>/logs/`. At the end of the
-backend and halo-finder jobs, `scripts/collect_products.py` copies the P(k) and HMF at the
-output redshifts to `$HICOLA_DATA_ROOT/hicola/`, which is what to keep since scratch is
-cleaned up.
+- Logs: `HiCOLA/Output/COLA/<target>/<model>/<realization>/logs/` (`standalone/<name>/logs/`
+  for standalone runs, `HiCOLA/Output/logs/` for the Abacus P(k)).
+- At the end of the backend and halo-finder jobs, `scripts/collect_products.py` copies the
+  P(k) and HMF of each output redshift to `hicola_data/hicola/` (section 6). It can be rerun
+  by hand: `python scripts/collect_products.py <target> <model> <realization>`.
+- `jobs/run_info.lua <run.lua>` prints a run's name, output folder, box size and redshifts.
 
-## Notebooks
+## 5. Halo finder and measurements
 
-Notebooks find their files through `scripts/hicola_paths.py`:
+- **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI): linking length 0.2, minimum
+  members per halo 30 for COLA_NM4096 and 50 for Abacus_Small, masses M200c computed with
+  the target's reference cosmology (`scripts/euclid_reference_cosmology.py`,
+  `scripts/abacus_reference_cosmology.py`). Defaults per target: `TARGETS` in
+  `scripts/hicola_paths.py`.
+- **HMF** (`scripts/run_halo_outputs.py`): cumulative n(>M) and dn/dlog10M with Poisson
+  errors, on the mass grid of the target's reference HMF at the same redshift when there is
+  one (COLA_NM4096), otherwise 60 log bins from 1e11 to 1e16 Msun/h.
+- **P(k)**: Hi-COLA's own measurement on each snapshot (`pofk_z<z>.txt`, shot noise
+  subtracted).
+- **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): halo + field particles
+  of subsample A (3%), TSC, Nmesh 1024, interlaced, 60 k-bins, shot noise subtracted.
+- `scripts/generate_abacus_cosm000_pk.py` regenerates the Abacus initial P(k) with CLASS and
+  checks its σ8.
+
+## 6. Reference data and kept measurements
+
+`hicola_data/README.md` describes the data in detail. File names:
+
+```
+hicola_data/reference/<sim>/<model>/Box<n>/<sim>_<model>_Box<n>_z<z>_{PS,HMF}.txt
+hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<realization>_z<z>_{PS,HMF}.txt
+```
+
+- `COLA_NM4096`: Bart's COLA boxes, `LCDM` and `nDGP_N1.2`, Box1–10, z = 1.65, 1.4, 1.2, 1.0,
+  PS and HMF (spherical overdensity; check its definition in `papers/Bart.pdf` before
+  comparing with M200c).
+- `Abacus_Small`: AbacusSummit `small_c000_ph3000`, `LCDM`, Box1, z = 0.5, PS only.
+- `raw/` folders hold the original data untouched.
+- Redshifts are always written with 3 decimals (`z1.650`), as in Hi-COLA's own file names.
+
+## 7. Notebooks
+
+`Notebooks/`. Each notebook's first cell puts `scripts/` on the path and imports
+`hicola_paths as hp`, which gives every file location:
 
 ```python
-import hicola_paths as hp   # after the sys.path setup in the first cell
-
-hp.reference_file('COLA_NM4096', 'LCDM', box, 1.65, 'PS')       # reference measurement
-hp.hicola_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5, 'PS')  # kept Hi-COLA measurement
-hp.pofk_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5)          # in the run folder on scratch
-hp.halo_catalog_dir(...), hp.hmf_file(...), hp.standalone_run_dir('LCDM_test')
+hp.reference_file('COLA_NM4096', 'LCDM', box, 1.65, 'PS')        # reference measurement
+hp.hicola_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5, 'PS')   # kept Hi-COLA measurement
+hp.pofk_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5)           # in the run folder on scratch
+hp.hmf_file(...), hp.halo_catalog_dir(...), hp.standalone_run_dir('cuGal')
 ```
 
-The HOD notebooks import HODDIES from `../HODDIES` (`$HODDIES_ROOT`).
+| notebook | what it does |
+|---|---|
+| `power_spectrum*.ipynb` | matter P(k) and HMF of Hi-COLA runs against the reference simulations |
+| `power_spectrum2_LRG_Abacus.ipynb` | LRG mocks (HODDIES) on the Abacus_Small runs: P(k), bias, centrals only, RSD multipoles |
+| `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; parameters in `HOD_parameter_file_z<z>.yaml` |
+| `halos.ipynb` | HMF ratios nDGP/LCDM against Bart's reference |
+| `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` |
+| `overdensity.ipynb` | density field of a snapshot (pynbody) |
+| `scan.ipynb` | scan of the nDGP frontend parameters |
 
-## Setting up elsewhere
+Notebooks that read run folders need the runs to still be on scratch; the kept P(k) and HMF
+in `hicola_data/hicola/` do not expire.
 
-1. Clone this repository and `HODDIES` next to each other, and copy `hicola_data/` next to them
-   (or export `HICOLA_DATA_ROOT`).
-2. Create the `hicola` conda env and build `HiCOLA/FML/COLASolver/nbody` (its Makefile points
-   to the env's FFTW, GSL and Lua).
-3. Export `HICOLA_RUN_ROOT` if the scratch path differs, and adapt the `#SBATCH` lines in
-   `jobs/*.sh` (partition, cores per node) to the cluster.
+**Jupyter on a compute node** (heavy notebooks need more memory than the login node):
+
+```bash
+Sinteract -n 72 -c 1 -m 256G -t 04:00:00 -p academic
+conda activate hicola
+ipnport=$(shuf -i8000-9999 -n1)
+jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
+```
+
+## 8. Adding a reference simulation
+
+1. Put its data in `hicola_data/reference/<sim>/<model>/Box<n>/` with the file names above
+   (originals in `raw/`), and describe it in `hicola_data/README.md`.
+2. Add `Backend_parameter_files/<sim>/base.lua` (copy an existing one and change box,
+   cosmology, initial P(k) in `Initial_power_spectra/`, output redshifts) and run files.
+3. Add the target to `TARGETS` in `scripts/hicola_paths.py` (box size, number of boxes,
+   reference redshifts, cosmology module, FoF minimum size), with a
+   `scripts/<name>_reference_cosmology.py` if the cosmology is new.
+
+## 9. Setting up on another machine
+
+1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` into the same folder and copy
+   `hicola_data/` next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
+2. Create the `hicola` env (section 2), build `nbody`, run `nbstripout --install`.
+3. Export `HICOLA_RUN_ROOT` if the scratch path is not `/scratch/$USER`, and adapt the
+   `#SBATCH` lines in `jobs/*.sh` (partition, cores per node, `--exclusive`) to the cluster.
+4. Check with a small run, e.g. a copy of a run file with `particle_Npart_1D = 192`,
+   `timestep_nsteps = {10}` and the derived meshes overridden, submitted with
+   `-N 1 -n 16 --time=0:30:00`.
+
+## 10. Known issues
+
+- Hi-COLA creates only the last level of `output_folder`; `jobs/backend.sh` creates the
+  nested run folder before starting. Run `nbody` by hand only after a `mkdir -p` of it.
+- `Frontend_parameter_files/nDGP/nDGP.ini` does not run (`Hubble0 = '1.0/Hubble_dS'` is
+  not a number). The nDGP tables used by `standalone/nDGP_action.lua` exist only in
+  `HiCOLA/Output/` on jed.
+- Reference HMF of COLA_NM4096 is spherical-overdensity with an unstated Δ; Hi-COLA HMFs are
+  FoF + M200c.
+- Abacus_Small has no reference HMF yet.

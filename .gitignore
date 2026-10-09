@@ -6,4 +6,3 @@ __pycache__/
 HiCOLA/FML/COLASolver/nbody
 HiCOLA/*.e[0-9]*
 HiCOLA/*.o[0-9]*
-Comparison/

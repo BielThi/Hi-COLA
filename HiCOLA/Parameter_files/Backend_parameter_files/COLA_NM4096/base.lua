@@ -292,7 +292,7 @@ ic_LPT_order = 2
 -- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA)
 ic_type_of_input = "powerspectrum"
 -- Path to the input (NB: the LCDM spectrum below is an example that comes with Hi-COLA)
-ic_input_filename = hicola_param_dir .. "/Bart_InitPk.txt"
+ic_input_filename = hicola_param_dir .. "/Initial_power_spectra/Bart_InitPk.txt"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation

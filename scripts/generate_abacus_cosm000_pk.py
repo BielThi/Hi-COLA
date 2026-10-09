@@ -34,7 +34,7 @@ import numpy as np
 
 import hicola_paths as hp
 
-OUTPUT_PATH = hp.BACKEND_PARAM_DIR / "abacus_cosm000_pk_cb_z0.000.dat"
+OUTPUT_PATH = hp.BACKEND_PARAM_DIR / "Initial_power_spectra" / "abacus_cosm000_pk_cb_z0.000.dat"
 
 # Expected sigma8_cb(z=0) for abacus_cosm000, from cosmoprimo's abacus_cosmologies.csv.
 # Used only as a sanity check on the file we just wrote (see verify_sigma8 below).

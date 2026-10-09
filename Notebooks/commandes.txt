@@ -1,5 +1,0 @@
-Run notebook on cluste node:
-Sinteract -n 72 -c 1 -m 256G -t 04:00:00 -p academic
-source activate hicola
-ipnport=$(shuf -i8000-9999 -n1)
-jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
