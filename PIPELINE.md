@@ -187,28 +187,41 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 
 ## 7. Notebooks
 
-`Notebooks/`. Each notebook's first cell puts `scripts/` on the path and imports
-`hicola_paths as hp`, which gives every file location:
+`Notebooks/`. Each notebook's first cell puts `scripts/` on the path and imports two modules:
 
-```python
-hp.reference_file('COLA_NM4096', 'LCDM', box, 1.65, 'PS')        # reference measurement
-hp.hicola_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5, 'PS')   # kept Hi-COLA measurement
-hp.pofk_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5)           # in the run folder on scratch
-hp.hmf_file(...), hp.halo_catalog_dir(...), hp.standalone_run_dir('cuGal')
-```
+- `hicola_paths as hp` gives every file location:
+
+  ```python
+  hp.reference_file('COLA_NM4096', 'LCDM', box, 1.65, 'PS')        # reference measurement
+  hp.hicola_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5, 'PS')   # kept Hi-COLA measurement
+  hp.pofk_file('Abacus_Small', 'nDGP_N1.2', 's1234', 0.5)           # in the run folder on scratch
+  hp.hmf_file(...), hp.halo_catalog_dir(...), hp.standalone_run_dir('cuGal')
+  ```
+
+- `analysis as an` loads and combines measurements:
+
+  ```python
+  k, P_mean, P_std = an.load_reference('COLA_NM4096', 'LCDM', 1.65, 'PS')       # mean and std over boxes
+  k, r_mean, r_std = an.reference_ratio('COLA_NM4096', 'nDGP_N1.2', 'LCDM', 1.65, 'PS')
+  k, P = an.load_hicola('COLA_NM4096', 'LCDM', an.PAIRED_FIXED, 1.65, 'PS')       # mean over realizations
+  an.ratio(x_num, y_num, x_den, y_den), an.interp_to(...), an.within(...)
+  ```
+
+  `load_hicola` reads the run folder on scratch, or the kept copy in `hicola_data/hicola/`
+  once scratch has been cleaned up, so the comparisons keep working after the cleanup.
 
 | notebook | what it does |
 |---|---|
-| `power_spectrum*.ipynb` | matter P(k) and HMF of Hi-COLA runs against the reference simulations |
-| `power_spectrum2_LRG_Abacus.ipynb` | LRG mocks (HODDIES) on the Abacus_Small runs: P(k), bias, centrals only, RSD multipoles |
+| `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ. Parameters: redshift, runs (e.g. `s1234` and/or the paired-fixed mean) |
+| `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs. Parameters: redshift, nDGP strength, runs |
+| `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias, centrals only, RSD multipoles |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; parameters in `HOD_parameter_file_z<z>.yaml` |
-| `halos.ipynb` | HMF ratios nDGP/LCDM against Bart's reference |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` |
-| `overdensity.ipynb` | density field of a snapshot (pynbody) |
-| `scan.ipynb` | scan of the nDGP frontend parameters |
+| `scan.ipynb` | scan of the nDGP frontend parameters (template `nDGP_scan/nDGP_scan.ini`) |
+| `halos.ipynb`, `overdensity.ipynb` | older analyses kept as starting points; they still point to runs that were removed |
 
-Notebooks that read run folders need the runs to still be on scratch; the kept P(k) and HMF
-in `hicola_data/hicola/` do not expire.
+In the comparison notebooks, all figures follow the parameter cell at the top. A run that
+doesn't exist yet is skipped with a message rather than stopping the notebook.
 
 **Jupyter on a compute node** (heavy notebooks need more memory than the login node):
 
