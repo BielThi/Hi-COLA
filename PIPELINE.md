@@ -39,9 +39,10 @@ here was added around it: `jobs/`, `scripts/`, `Notebooks/`, and the run files i
 | snapshots, P(k) per time step, halo catalogs | `$HICOLA_RUN_ROOT` on scratch, ~85 GB per run | no: scratch is cleaned up automatically |
 | reference simulations, kept P(k)/HMF of each run | `hicola_data/` | home |
 
-The four variables are set in `jobs/hicola_env.sh` and read by the Lua files
-(`Backend_parameter_files/common.lua`) and the Python code (`scripts/hicola_paths.py`),
-always with the same defaults. Export one before running to change it.
+The four variables are set in `jobs/hicola_env.sh` and read by the Python code
+(`scripts/hicola_paths.py`) with the same defaults; export one before running to change it.
+In the jobs, `HICOLA_RUN_ROOT` is taken from the `output_folder` of the run file, so the
+`.lua` file decides where a run goes.
 
 ## 2. Software setup
 
@@ -88,24 +89,31 @@ P(k)) and named by a **model** and a **realization**:
 HiCOLA/Parameter_files/Backend_parameter_files/
 ├── Hi-COLA_params.lua            original Hi-COLA template
 ├── LCDM_1306dot3219_matterpower_z0.000.dat   original Hi-COLA example P(k) (σ8 ≈ 0.92, testing only)
-├── common.lua                    naming scheme and paths, loaded by every run file
 ├── Initial_power_spectra/        Bart_InitPk.txt (COLA_NM4096), abacus_cosm000_pk_cb_z0.000.dat (Abacus_Small)
-├── COLA_NM4096/base.lua          all settings shared by the COLA_NM4096 runs
 ├── COLA_NM4096/<model>_<realization>.lua
-├── Abacus_Small/base.lua
 ├── Abacus_Small/<model>_<realization>.lua
 └── standalone/                   runs not matched to a reference, kept as examples:
     ├── cuGal.lua                 cubic Galileon through the frontend (gravity_model = "HiCOLA")
     └── nDGP_action.lua           nDGP from its Horndeski action through the frontend
 ```
 
-A run file only sets `model` and `realization` and loads `base.lua`. To add a run, copy a
-run file and change the two names; settings that should differ from the base (e.g. a higher
-resolution) go after the `dofile` line, together with whatever the base derives from them
-(`ic_nmesh`, `force_nmesh`, `pofk_nmesh`, ...).
+Every run file is a complete Hi-COLA parameter file, like the original template: every
+setting is written in it. Within a target, the files differ only in `simulation_name`,
+`output_folder`, `gravity_model` (and `gravity_model_dgp_rcH0overc`), `ic_random_seed`,
+`ic_fix_amplitude` and `ic_reverse_phases`. Input paths (initial P(k), frontend tables) are
+relative to the Hi-COLA folder, where the jobs run `nbody`.
 
-Every run gets `simulation_name = <target>_<model>_<realization>` and writes Hi-COLA's usual
-files to `$HICOLA_RUN_ROOT/<target>/<model>/<realization>/`:
+The pipeline finds a run's outputs by its name, so a run file must follow this naming (the
+jobs check it and stop with a message otherwise):
+
+| in the run file | value |
+|---|---|
+| location | `<target>/<model>_<realization>.lua` |
+| `simulation_name` | `"<target>_<model>_<realization>"` |
+| `output_folder` | `"<run root>/<target>/<model>/<realization>/"`, run root `/scratch/biel/Hi-COLA_Output` on jed |
+
+To add a run, copy a run file, rename it and change those values (and whatever else differs).
+Hi-COLA then writes its usual files to the output folder:
 
 ```
 pofk_<simulation_name>_cb_z<z>.txt         P_cb(k) and linear P(k) at every time step
@@ -119,7 +127,7 @@ snapshot_<simulation_name>_z<z>/           one per output redshift
     └── halos200c_hoddies.npy (+ .json)    halo array in HODDIES' format
 ```
 
-Standalone runs write to `$HICOLA_RUN_ROOT/standalone/<file name>/` and keep their own
+Standalone runs write to `<run root>/standalone/<file name>/` and keep their own
 `simulation_name`. They need frontend tables in `HiCOLA/Output/` (section 4), which are not
 in git.
 
@@ -150,8 +158,8 @@ sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once 
   was run: code commit, conda env, run and data roots, and for a backend or halo-finder job
   the run file with its box, particles, steps, gravity, cosmology, initial P(k), seed and
   output redshifts (plus the FoF settings, halo cosmology and HMF mass grid for the halo finder).
-- Everything else is set in the run file and its `base.lua`; the only other inputs are the
-  paths and env name in `jobs/hicola_env.sh`. The halo finder takes the box size from the
+- Everything else is set in the run file; the only other inputs are the data root and env
+  name in `jobs/hicola_env.sh`. The halo finder takes the box size from the
   run file and the cosmology from the run's target.
 - At the end of the backend and halo-finder jobs, `scripts/collect_products.py` copies the
   P(k) and HMF of each output redshift to `hicola_data/hicola/` (section 6). It can be rerun
@@ -243,10 +251,11 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 
 1. Put its data in `hicola_data/reference/<sim>/<model>/Box<n>/` with the file names above
    (originals in `raw/`), and describe it in `hicola_data/README.md`.
-2. Add `Backend_parameter_files/<sim>/base.lua` (copy an existing one and change box,
-   cosmology, initial P(k) in `Initial_power_spectra/`, output redshifts) and run files.
+2. Add the folder `Backend_parameter_files/<sim>/` with run files: copy existing ones and
+   change box, cosmology, initial P(k) (in `Initial_power_spectra/`), output redshifts and the
+   names (section 3).
 3. Add the target to `TARGETS` in `scripts/hicola_paths.py` (box size, number of boxes,
-   reference redshifts, cosmology module, FoF minimum size), with a
+   reference redshifts, cosmology module, default FoF minimum size), with a
    `scripts/<name>_reference_cosmology.py` if the cosmology is new.
 
 ## 9. Setting up on another machine
@@ -254,8 +263,11 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` into the same folder and copy
    `hicola_data/` next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` env (section 2), build `nbody` with it activated, run `nbstripout --install`.
-3. Export `HICOLA_RUN_ROOT` if the scratch path is not `/scratch/$USER`, and adapt the
-   `#SBATCH` lines in `jobs/*.sh` (partition, cores per node, `--exclusive`) to the cluster.
+3. If the scratch path differs from `/scratch/biel/Hi-COLA_Output`, change it in the
+   `output_folder` of the run files (one command:
+   `sed -i 's#/scratch/biel/Hi-COLA_Output#<new path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua`)
+   and export the same path as `HICOLA_RUN_ROOT` for the notebooks. Adapt the `#SBATCH`
+   lines in `jobs/*.sh` (partition, cores per node, `--exclusive`, memory) to the cluster.
 4. Check with a small run, e.g. a copy of a run file with `particle_Npart_1D = 192`,
    `timestep_nsteps = {10}` and the derived meshes overridden, submitted with
    `sbatch -N 1 -n 16 --time=0:30:00 jobs/backend.sh <that file>`.

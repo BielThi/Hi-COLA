@@ -32,7 +32,7 @@ source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")
 
-eval "$(hicola_run_info "$RUN_FILE")"
+hicola_load_run "$RUN_FILE"
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Resources:      ${SLURM_JOB_NUM_NODES} nodes, ${SLURM_NTASKS} MPI tasks"

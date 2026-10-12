@@ -4,7 +4,8 @@
 
 HICOLA_ROOT="${HICOLA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export HICOLA_ROOT
-# Simulation outputs (large, regenerable): snapshots, P(k), halo catalogs
+# Simulation outputs (large, regenerable): snapshots, P(k), halo catalogs. Used by the notebooks;
+# in the jobs it is replaced by the run root of the run file's output_folder (hicola_load_run).
 export HICOLA_RUN_ROOT="${HICOLA_RUN_ROOT:-/scratch/$USER/Hi-COLA_Output}"
 # Reference data and the kept Hi-COLA measurements, next to the repository
 export HICOLA_DATA_ROOT="${HICOLA_DATA_ROOT:-$(dirname "$HICOLA_ROOT")/hicola_data}"
@@ -30,10 +31,13 @@ if [ "${CONDA_DEFAULT_ENV:-}" != "$HICOLA_CONDA_ENV" ]; then
     unset hicola_nounset
 fi
 
-# Print the identity of a run file as shell assignments (see jobs/run_info.lua):
-#   eval "$(hicola_run_info path/to/run.lua)"
-hicola_run_info() {
-    lua "$HICOLA_ROOT/jobs/run_info.lua" "$1"
+# Load the identity and settings of a run file into shell variables (see jobs/run_info.lua),
+# and point HICOLA_RUN_ROOT at the run root its output_folder is in:  hicola_load_run <run.lua>
+hicola_load_run() {
+    local info
+    info=$(lua "$HICOLA_ROOT/jobs/run_info.lua" "$1") || return 1
+    eval "$info"
+    export HICOLA_RUN_ROOT="$RUN_ROOT"
 }
 
 # Header of the job logs: code version and where everything is read from and written to
@@ -51,7 +55,7 @@ hicola_print_env() {
     echo "Data root:      $HICOLA_DATA_ROOT"
 }
 
-# Settings of the run whose run_info was loaded with eval "$(hicola_run_info ...)"
+# Settings of the run loaded with hicola_load_run
 hicola_print_run() {
     echo "Run file:       $1"
     echo "Run:            $RUN_LABEL  (simulation_name = $SIM_NAME)"

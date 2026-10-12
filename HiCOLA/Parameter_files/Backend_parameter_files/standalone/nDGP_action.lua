@@ -1,12 +1,7 @@
 ------------------------------------------------------------
--- Standalone run: not matched to a reference simulation.
--- Output goes to $HICOLA_RUN_ROOT/standalone/<this file's name>/ (see ../common.lua).
+-- Standalone Hi-COLA run nDGP_action: not matched to a reference simulation.
+-- Input paths are relative to the Hi-COLA folder: run nbody from there (jobs/backend.sh does).
 ------------------------------------------------------------
-local here = debug.getinfo(1, "S").source:sub(2)
-if here:sub(1, 1) ~= "/" then here = (os.getenv("PWD") or ".") .. "/" .. here end
-here = here:gsub("/%./", "/")
-dofile(here:match("^(.*)/[^/]*/[^/]*$") .. "/common.lua")
-local run_stem = here:match("([^/]*)%.lua$")
 
 ------------------------------------------------------------
 -- Simulation parameter file
@@ -71,7 +66,7 @@ cosmology_kpivot_mpc = 0.05
 -- HiCOLA model, read background from file
 if cosmology_model == "HiCOLA" then
   -- Name of file that contains [k, E, dlogH/dloga]
-  HiCOLA_expansion_filename = hicola_output_dir .. "/LCDM_Planck18_expansion.txt"
+  HiCOLA_expansion_filename = "HiCOLA/Output/LCDM_Planck18_expansion.txt"
 end
 
 -- The w0wa parametrization
@@ -108,8 +103,8 @@ gravity_model = "HiCOLA"
 -- HiCOLA model
 if gravity_model == "HiCOLA" then
   -- Name of file that contains [k, chi/delta, coupling]
-  HiCOLA_input_filename = hicola_output_dir .. "/nDGP_Planck18_force.txt"
-  HiCOLA_preforce_filename = hicola_output_dir .. "/nDGP_Planck18_force.txt"
+  HiCOLA_input_filename = "HiCOLA/Output/nDGP_Planck18_force.txt"
+  HiCOLA_preforce_filename = "HiCOLA/Output/nDGP_Planck18_force.txt"
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
   -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk)
@@ -246,7 +241,7 @@ output_particles = true
 -- Fileformat: GADGET, FML
 output_fileformat = "GADGET"
 -- Output folder
-output_folder = hicola_run_root .. "/standalone/" .. run_stem .. "/"
+output_folder = "/scratch/biel/Hi-COLA_Output/standalone/nDGP_action/"
 
 ------------------------------------------------------------
 -- Time-stepping
@@ -293,7 +288,7 @@ ic_LPT_order = 2
 -- read_particles   (read GADGET file and use that for sim - reconstruct LPT fields if COLA)
 ic_type_of_input = "powerspectrum"
 -- Path to the input (NB: the LCDM spectrum below is an example that comes with Hi-COLA)
-ic_input_filename = hicola_param_dir .. "/LCDM_1306dot3219_matterpower_z0.000.dat"
+ic_input_filename = "HiCOLA/Parameter_files/Backend_parameter_files/LCDM_1306dot3219_matterpower_z0.000.dat"
 -- The redshift of the P(k), T(k) we give as input
 ic_input_redshift = 0.0
 -- The initial redshift of the simulation

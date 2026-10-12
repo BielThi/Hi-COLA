@@ -39,7 +39,7 @@ source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")
 
-eval "$(hicola_run_info "$RUN_FILE")"
+hicola_load_run "$RUN_FILE"
 if [ "$TARGET" = standalone ]; then
     echo "The halo finder needs a run matched to a reference simulation, not $RUN_LABEL" >&2
     exit 1

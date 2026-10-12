@@ -13,8 +13,9 @@ A run is identified by (target, model, realization), e.g. ("Abacus_Small", "nDGP
     realization  s<seed>[-fixed[-inv]]
 
 Its Lua file is HiCOLA/Parameter_files/Backend_parameter_files/<target>/<model>_<realization>.lua,
-which sets simulation_name = <target>_<model>_<realization> and writes to
-$HICOLA_RUN_ROOT/<target>/<model>/<realization>/ with Hi-COLA's own file names.
+a complete Hi-COLA parameter file with simulation_name = "<target>_<model>_<realization>" and
+output_folder = "<run root>/<target>/<model>/<realization>/" (checked by jobs/run_info.lua).
+Hi-COLA writes its own file names there.
 
 Reference measurements live in $HICOLA_DATA_ROOT/reference/<sim>/<model>/Box<n>/ and the kept
 Hi-COLA measurements in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/, both named
@@ -42,7 +43,7 @@ NOTEBOOK_DIR = HICOLA_ROOT / "Notebooks"
 KINDS = ("PS", "HMF")
 
 # Analysis settings per reference simulation. The simulation settings themselves
-# (box size, cosmology, output redshifts) are in Backend_parameter_files/<target>/base.lua.
+# (box size, cosmology, output redshifts) are in the run files, Backend_parameter_files/<target>/*.lua.
 TARGETS = {
     "COLA_NM4096": {
         "boxsize": 1024.0,
