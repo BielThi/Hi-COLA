@@ -57,10 +57,10 @@ The job scripts activate it themselves (`$HICOLA_CONDA_ENV`, default `hicola`).
 
 **HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository. The HOD
 notebooks import it from there (`$HODDIES_ROOT`), not from the `HODDIES` package installed
-in the env, which is a different copy. The clone used so far has uncommitted changes:
-numba `parallel` turned off in `HODDIES/utils.py` and the custom-cosmology line commented
-out in `HODDIES/hod.py`. Commit them to the fork to make the HOD results reproducible
-elsewhere.
+in the env, which is a different copy. The fork's `main` (commit `2572a69`) has two
+workarounds on top of the original code: numba parallelism turned off (crashes on jed; same
+results, slower), and no custom cosmology built from the `cosmo` parameters (that line raised
+a `NameError`), so the notebooks set `HOD_obj.cosmo` themselves.
 
 **hi_class**: the env's `classy` was built from `~/hi_class_public`
 (`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline imports it any
