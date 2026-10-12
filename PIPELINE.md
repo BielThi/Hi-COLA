@@ -134,9 +134,10 @@ in git.
 ## 4. Running
 
 Each job script in `jobs/` has a **user parameters** block at the top: edit it, then submit
-the script with `sbatch` **from the Hi-COLA folder** (the jobs find the repository and write
-their logs relative to it). The `#SBATCH` lines are the production settings on jed (academic
-partition); edit them in the script or override them on the command line.
+the script with `sbatch`, from any folder. Paths in the parameter blocks are relative to the
+Hi-COLA folder; a run file given on the command line is relative to where you submit. The
+`#SBATCH` lines are the production settings on jed (academic partition); edit them in the
+script or override them on the command line.
 
 | script | parameters | run with |
 |---|---|---|
@@ -146,6 +147,7 @@ partition); edit them in the script or override them on the command line.
 | `jobs/frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | `sbatch jobs/frontend.sh` (or `bash jobs/frontend.sh`, it is quick) |
 
 ```bash
+sbatch ~/Hi-COLA/jobs/backend.sh                              # from anywhere
 cd ~/Hi-COLA
 sbatch jobs/backend.sh                                        # RUN_FILE from the script
 sbatch -N 2 -n 128 --time=1:00:00 jobs/backend.sh             # other resources
@@ -154,7 +156,9 @@ sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once 
 ```
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
-- Logs: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`. Each log starts with what
+- Logs: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`, written to the full path in
+  the `#SBATCH -o/-e` lines (`/home/biel/Hi-COLA/HiCOLA/Output/logs/`), whatever folder you
+  submit from. Each log starts with what
   was run: code commit, conda env, run and data roots, and for a backend or halo-finder job
   the run file with its box, particles, steps, gravity, cosmology, initial P(k), seed and
   output redshifts (plus the FoF settings, halo cosmology and HMF mass grid for the halo finder).
@@ -266,11 +270,18 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` into the same folder and copy
    `hicola_data/` next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` env (section 2), build `nbody` with it activated, run `nbstripout --install`.
-3. If the scratch path differs from `/scratch/biel/Hi-COLA_Output`, change it in the
-   `output_folder` of the run files (one command:
-   `sed -i 's#/scratch/biel/Hi-COLA_Output#<new path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua`)
-   and export the same path as `HICOLA_RUN_ROOT` for the notebooks. Adapt the `#SBATCH`
-   lines in `jobs/*.sh` (partition, cores per node, `--exclusive`, memory) to the cluster.
+3. Two machine-specific paths are written in full in the files:
+   - the scratch path in the `output_folder` of the run files, and
+   - the log folder in the `#SBATCH -o/-e` lines of the job scripts.
+
+   If they differ, change them with
+   ```bash
+   sed -i 's#/scratch/biel/Hi-COLA_Output#<new scratch path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua
+   sed -i 's#/home/biel/Hi-COLA/#<new Hi-COLA path>/#' jobs/*.sh
+   ```
+   and export the scratch path as `HICOLA_RUN_ROOT` for the notebooks. Adapt the other
+   `#SBATCH` lines in `jobs/*.sh` (partition, cores per node, `--exclusive`, memory) to the
+   cluster. A second clone on jed needs the same `sed` for its log folder.
 4. Check with a small run, e.g. a copy of a run file with `particle_Npart_1D = 192`,
    `timestep_nsteps = {10}` and the derived meshes overridden, submitted with
    `sbatch -N 1 -n 16 --time=0:30:00 jobs/backend.sh <that file>`.

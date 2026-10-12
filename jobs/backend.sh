@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=backend
-#SBATCH -o HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 8
 #SBATCH -n 512
 #SBATCH --mem-per-cpu=6G
@@ -11,9 +11,10 @@
 #SBATCH --exclusive
 # Run one Hi-COLA backend simulation, then copy its P(k) to $HICOLA_DATA_ROOT/hicola/.
 #
-# Edit the parameters below, then submit from the Hi-COLA folder:
-#   cd ~/Hi-COLA && sbatch jobs/backend.sh
+# Edit the parameters below, then submit it (from any folder):
+#   sbatch ~/Hi-COLA/jobs/backend.sh          (or, from the Hi-COLA folder: sbatch jobs/backend.sh)
 # A run file given on the command line replaces RUN_FILE:  sbatch jobs/backend.sh <run.lua>
+# Logs: the #SBATCH -o/-e lines (HiCOLA/Output/logs/ of this clone; update them in another clone).
 
 # ---------------------------- user parameters ----------------------------
 # Run file, relative to the Hi-COLA folder (or absolute). It sets the model, realization,
@@ -22,12 +23,21 @@ RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234
 # -------------------------------------------------------------------------
 
 set -euo pipefail
-RUN_FILE=${1:-$RUN_FILE}
-HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
+# The Hi-COLA folder this script belongs to. SLURM runs a copy of the script, so ask SLURM
+# where the original is; outside SLURM, use this file's location.
+if [ -n "${SLURM_JOB_ID:-}" ]; then
+    SCRIPT=$(scontrol show job "$SLURM_JOB_ID" 2>/dev/null | sed -n 's/^ *Command=\([^ ]*\).*/\1/p')
+else
+    SCRIPT=${BASH_SOURCE[0]}
+fi
+HICOLA_ROOT=${HICOLA_ROOT:-$(cd "$(dirname "${SCRIPT:-$SLURM_SUBMIT_DIR/jobs/x}")/.." && pwd)}
 if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
-    echo "Submit this job from the Hi-COLA folder: cd <Hi-COLA> && sbatch jobs/backend.sh" >&2
+    echo "Cannot find the Hi-COLA folder (looked in $HICOLA_ROOT)" >&2
     exit 1
 fi
+# A run file given on the command line is relative to where you submitted; RUN_FILE above is
+# relative to the Hi-COLA folder
+if [ $# -ge 1 ]; then RUN_FILE=$(cd "${SLURM_SUBMIT_DIR:-$PWD}" && readlink -f "$1"); fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")

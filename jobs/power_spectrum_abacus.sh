@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=power_spectrum_abacus
-#SBATCH -o HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=16
@@ -11,8 +11,8 @@
 # Matter P(k) of the Abacus_Small reference box, written to
 # $HICOLA_DATA_ROOT/reference/Abacus_Small/LCDM/Box1/Abacus_Small_LCDM_Box1_z<z>_PS.txt.
 #
-# Edit the parameters below, then submit from the Hi-COLA folder:
-#   cd ~/Hi-COLA && sbatch jobs/power_spectrum_abacus.sh
+# Edit the parameters below, then submit it (from any folder):
+#   sbatch ~/Hi-COLA/jobs/power_spectrum_abacus.sh          (or, from the Hi-COLA folder: sbatch jobs/power_spectrum_abacus.sh)
 
 # ---------------------------- user parameters ----------------------------
 # The estimator itself (TSC mass assignment, interlacing, shot-noise subtraction) is fixed in
@@ -28,9 +28,16 @@ KBINS="60"    # independent of NMESH: fixes the mostly-empty/noisy low-k bins fr
 # -------------------------------------------------------------------------
 
 set -euo pipefail
-HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
+# The Hi-COLA folder this script belongs to. SLURM runs a copy of the script, so ask SLURM
+# where the original is; outside SLURM, use this file's location.
+if [ -n "${SLURM_JOB_ID:-}" ]; then
+    SCRIPT=$(scontrol show job "$SLURM_JOB_ID" 2>/dev/null | sed -n 's/^ *Command=\([^ ]*\).*/\1/p')
+else
+    SCRIPT=${BASH_SOURCE[0]}
+fi
+HICOLA_ROOT=${HICOLA_ROOT:-$(cd "$(dirname "${SCRIPT:-$SLURM_SUBMIT_DIR/jobs/x}")/.." && pwd)}
 if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
-    echo "Submit this job from the Hi-COLA folder: cd <Hi-COLA> && sbatch jobs/power_spectrum_abacus.sh" >&2
+    echo "Cannot find the Hi-COLA folder (looked in $HICOLA_ROOT)" >&2
     exit 1
 fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"

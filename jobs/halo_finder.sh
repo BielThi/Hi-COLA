@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=halo_finder
-#SBATCH -o HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 8
 #SBATCH -n 512
 #SBATCH --mem-per-cpu=6G
@@ -11,8 +11,8 @@
 # FoF halo finding on one snapshot of a Hi-COLA run, then the HMF and the HODDIES halo array,
 # then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
 #
-# Edit the parameters below, then submit from the Hi-COLA folder:
-#   cd ~/Hi-COLA && sbatch jobs/halo_finder.sh
+# Edit the parameters below, then submit it (from any folder):
+#   sbatch ~/Hi-COLA/jobs/halo_finder.sh          (or, from the Hi-COLA folder: sbatch jobs/halo_finder.sh)
 # To start after the backend job: sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh
 
 # ---------------------------- user parameters ----------------------------
@@ -33,9 +33,16 @@ HMF_MASS_GRID="1e11 1e16 60"
 # Box size and cosmology (for the halo masses) are taken from the run file.
 
 set -euo pipefail
-HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
+# The Hi-COLA folder this script belongs to. SLURM runs a copy of the script, so ask SLURM
+# where the original is; outside SLURM, use this file's location.
+if [ -n "${SLURM_JOB_ID:-}" ]; then
+    SCRIPT=$(scontrol show job "$SLURM_JOB_ID" 2>/dev/null | sed -n 's/^ *Command=\([^ ]*\).*/\1/p')
+else
+    SCRIPT=${BASH_SOURCE[0]}
+fi
+HICOLA_ROOT=${HICOLA_ROOT:-$(cd "$(dirname "${SCRIPT:-$SLURM_SUBMIT_DIR/jobs/x}")/.." && pwd)}
 if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
-    echo "Submit this job from the Hi-COLA folder: cd <Hi-COLA> && sbatch jobs/halo_finder.sh" >&2
+    echo "Cannot find the Hi-COLA folder (looked in $HICOLA_ROOT)" >&2
     exit 1
 fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
