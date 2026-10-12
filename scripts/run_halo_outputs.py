@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
 
-The mass grid of the HMF is the one of the target's reference HMF at the same redshift
-(Box1, LCDM) when it exists, so both can be compared bin by bin.
+The HMF mass grid is chosen with --mass-grid:
+    reference        the masses of the target's reference HMF at the same redshift (Box1, LCDM),
+                     so both can be compared bin by bin; fails if there is no reference HMF
+    MIN MAX N        N log-spaced masses from MIN to MAX [Msun/h], e.g. 1e11 1e16 60
 """
 from __future__ import annotations
 
@@ -24,28 +26,35 @@ def default_hmf_output(halo_catalog: Path) -> Path:
     return halo_catalog.with_name("halos200c_hmf.txt")
 
 
-def default_mass_grid(target: str, redshift: float) -> tuple[np.ndarray, str]:
-    reference = hp.reference_file(target, "LCDM", 1, redshift, "HMF")
-    if reference.exists():
+def mass_grid(spec: list[str], target: str, redshift: float) -> tuple[np.ndarray, str]:
+    """Masses of the HMF and a description of where they come from (see the module docstring)."""
+    if spec == ["reference"]:
+        reference = hp.reference_file(target, "LCDM", 1, redshift, "HMF")
+        if not reference.exists():
+            raise SystemExit(f"--mass-grid reference: there is no reference HMF {reference}")
         return np.loadtxt(reference, comments="#")[:, 0], str(reference)
-    return np.logspace(11.0, 16.0, 60), "np.logspace(11, 16, 60)"
+    if len(spec) == 3:
+        m_min, m_max, n = float(spec[0]), float(spec[1]), int(spec[2])
+        return np.logspace(np.log10(m_min), np.log10(m_max), n), f"{n} log-spaced masses from {m_min:g} to {m_max:g} Msun/h"
+    raise SystemExit(f"--mass-grid must be 'reference' or 'MIN MAX N', got {' '.join(spec)!r}")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Write HMF and HODDIES outputs from a halo catalog.")
-    parser.add_argument("--target", required=True, choices=sorted(hp.TARGETS))
+    parser.add_argument("--target", required=True, help="e.g. COLA_NM4096, Abacus_Small")
     parser.add_argument("--model", required=True, help="e.g. LCDM, nDGP_N1.2")
     parser.add_argument("--realization", required=True, help="e.g. s1234, s1234-fixed")
     parser.add_argument("--redshift", type=float, required=True)
     parser.add_argument("--halo-catalog", type=Path, default=None, help="Default: from the run")
-    parser.add_argument("--boxsize", type=float, default=None, help="Default: the target's box size")
+    parser.add_argument("--boxsize", type=float, required=True, help="Mpc/h")
+    parser.add_argument("--mass-grid", nargs="+", required=True, metavar="reference | MIN MAX N",
+                        help="HMF masses, see the module docstring")
     parser.add_argument("--hmf-output", type=Path, default=None)
     parser.add_argument("--hoddies-output", type=Path, default=None)
     args = parser.parse_args()
 
     run = (args.target, args.model, args.realization, args.redshift)
     args.halo_catalog = args.halo_catalog or hp.halo_catalog_file(*run)
-    args.boxsize = args.boxsize or hp.TARGETS[args.target]["boxsize"]
     return args
 
 
@@ -74,8 +83,9 @@ def main() -> int:
             sort_keys=True,
         )
 
-    mass_grid, mass_grid_source = default_mass_grid(args.target, args.redshift)
-    hmf = compute_hmf(catalog["m200c"], volume=args.boxsize**3, mass_grid=mass_grid)
+    masses, mass_grid_source = mass_grid(args.mass_grid, args.target, args.redshift)
+    print(f"HMF mass grid: {mass_grid_source}")
+    hmf = compute_hmf(catalog["m200c"], volume=args.boxsize**3, mass_grid=masses)
     hmf_output = args.hmf_output or default_hmf_output(args.halo_catalog)
     save_hmf_table(
         hmf,

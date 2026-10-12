@@ -5,10 +5,13 @@ This script is intended to be launched with MPI, normally through jobs/halo_find
 for example:
 
     srun -n 72 python scripts/run_halo_catalog.py --target Abacus_Small --model LCDM \
-        --realization s1234 --redshift 0.5
+        --realization s1234 --redshift 0.5 --boxsize 500 --linking-length 0.2 --nmin 50 \
+        --mdef 200c --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 --omega-lambda 0.684808 \
+        --tcmb 2.726 --neff 3.046 --n-s 0.9649
 
-The snapshot, output file, box size, reference cosmology and minimum halo size follow from
-the run identity (see hicola_paths.py); --snapshot/--output/--boxsize/--nmin override them.
+All halo settings and the cosmology (taken from the run file by jobs/halo_finder.sh) are given
+explicitly; the snapshot and output file follow from the run identity (see hicola_paths.py)
+unless --snapshot/--output are given.
 
 It writes one flat structured NumPy halo catalog. Downstream notebooks can use
 that catalog directly for HMFs, or convert it to HODDIES' expected field names
@@ -33,26 +36,56 @@ import hicola_paths as hp
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target", required=True, choices=sorted(hp.TARGETS))
+    parser.add_argument("--target", required=True, help="e.g. COLA_NM4096, Abacus_Small")
     parser.add_argument("--model", required=True, help="e.g. LCDM, nDGP_N1.2")
     parser.add_argument("--realization", required=True, help="e.g. s1234, s1234-fixed")
     parser.add_argument("--redshift", type=float, required=True)
     parser.add_argument("--snapshot", default=None, help="Gadget snapshot glob (default: from the run)")
     parser.add_argument("--output", default=None, help="Output halo catalog .npy file (default: from the run)")
-    parser.add_argument("--boxsize", type=float, default=None, help="Default: the target's box size")
-    parser.add_argument("--linking-length", type=float, default=0.2)
-    parser.add_argument("--nmin", type=int, default=None, help="Default: the target's halo_nmin")
-    parser.add_argument("--mdef", default="200c")
-    parser.add_argument("--particle-type", type=int, default=1)
+    parser.add_argument("--boxsize", type=float, required=True, help="Mpc/h")
+    parser.add_argument("--linking-length", type=float, required=True, help="in units of the mean particle separation")
+    parser.add_argument("--nmin", type=int, required=True, help="minimum number of particles per halo")
+    parser.add_argument("--mdef", required=True, choices=["200c"],
+                        help="mass definition; only 200c, the catalog fields and files are named for it")
+    parser.add_argument("--particle-type", type=int, default=1, help="Gadget particle type of the dark matter")
+    cosmo = parser.add_argument_group("cosmology (of the simulation, used for the halo masses)")
+    cosmo.add_argument("--h", type=float, required=True)
+    cosmo.add_argument("--omega-cdm", type=float, required=True)
+    cosmo.add_argument("--omega-b", type=float, required=True)
+    cosmo.add_argument("--omega-mnu", type=float, default=0.0)
+    cosmo.add_argument("--omega-lambda", type=float, required=True, help="recorded in the metadata (the cosmology is flat)")
+    cosmo.add_argument("--tcmb", type=float, required=True, help="K")
+    cosmo.add_argument("--neff", type=float, required=True)
+    cosmo.add_argument("--n-s", type=float, required=True)
     args = parser.parse_args()
 
     run = (args.target, args.model, args.realization, args.redshift)
-    target = hp.TARGETS[args.target]
     args.snapshot = args.snapshot or hp.snapshot_glob(*run)
     args.output = args.output or str(hp.halo_catalog_file(*run))
-    args.boxsize = args.boxsize or target["boxsize"]
-    args.nmin = args.nmin or target["halo_nmin"]
     return args
+
+
+def run_cosmology(args: argparse.Namespace):
+    """Astropy cosmology of the simulation and its parameters as stored in the metadata."""
+    from astropy import units as u
+    from astropy.cosmology import FlatLambdaCDM
+
+    omega_m = args.omega_cdm + args.omega_b + args.omega_mnu
+    astropy_cosmology = FlatLambdaCDM(
+        H0=100.0 * args.h, Om0=omega_m, Ob0=args.omega_b, Tcmb0=args.tcmb * u.K, Neff=args.neff
+    )
+    parameters = {
+        "H0_km_s_Mpc": 100.0 * args.h,
+        "h": args.h,
+        "Omega_m": omega_m,
+        "Omega_cdm": args.omega_cdm,
+        "Omega_b": args.omega_b,
+        "Omega_Lambda": args.omega_lambda,
+        "Tcmb0_K": args.tcmb,
+        "Neff": args.neff,
+        "n_s": args.n_s,
+    }
+    return astropy_cosmology, parameters
 
 
 def log(comm: MPI.Comm, message: str) -> None:
@@ -182,9 +215,9 @@ def main() -> int:
     from nbodykit.cosmology.cosmology import Cosmology
     from nbodykit.lab import Gadget1Catalog
 
-    reference = hp.reference_cosmology(args.target)
-    cosmology = Cosmology.from_astropy(reference.get_cosmology(), n_s=reference.ns)
-    log(comm, f"Using {reference.SOURCE} reference cosmology: {reference.SERIALIZABLE_PARAMETERS}")
+    astropy_cosmology, cosmology_parameters = run_cosmology(args)
+    cosmology = Cosmology.from_astropy(astropy_cosmology, n_s=args.n_s)
+    log(comm, f"Using the simulation's cosmology: {cosmology_parameters}")
 
     log(comm, "Opening Gadget catalog")
     gadget = Gadget1Catalog(args.snapshot, comm=comm)
@@ -232,8 +265,8 @@ def main() -> int:
             "target": args.target,
             "model": args.model,
             "realization": args.realization,
-            "cosmology": reference.SERIALIZABLE_PARAMETERS,
-            "cosmology_source": reference.SOURCE,
+            "cosmology": cosmology_parameters,
+            "cosmology_source": "the simulation's run file",
             "schema": "flat halo catalog",
             "mass_field": "m200c",
             "mass_units": "Msun/h",

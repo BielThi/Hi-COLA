@@ -25,7 +25,6 @@ Hi-COLA measurements in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/
 from __future__ import annotations
 
 import getpass
-import importlib
 import os
 from pathlib import Path
 
@@ -41,25 +40,6 @@ FRONTEND_PARAM_DIR = HICOLA_ROOT / "HiCOLA" / "Parameter_files" / "Frontend_para
 NOTEBOOK_DIR = HICOLA_ROOT / "Notebooks"
 
 KINDS = ("PS", "HMF")
-
-# Analysis settings per reference simulation. The simulation settings themselves
-# (box size, cosmology, output redshifts) are in the run files, Backend_parameter_files/<target>/*.lua.
-TARGETS = {
-    "COLA_NM4096": {
-        "boxsize": 1024.0,
-        "n_boxes": 10,
-        "reference_redshifts": (1.65, 1.4, 1.2, 1.0),
-        "cosmology": "euclid",
-        "halo_nmin": 30,
-    },
-    "Abacus_Small": {
-        "boxsize": 500.0,
-        "n_boxes": 1,
-        "reference_redshifts": (0.5,),
-        "cosmology": "abacus",
-        "halo_nmin": 50,
-    },
-}
 
 
 def zlabel(redshift: float) -> str:
@@ -166,11 +146,6 @@ def abacus_halo_dir(redshift: float = 0.5, sim_name: str = "AbacusSummit_small_c
 
 
 # ---------------------------------------------------------------- misc
-
-
-def reference_cosmology(target: str):
-    """Reference cosmology module (euclid_/abacus_reference_cosmology) used for a target."""
-    return importlib.import_module(f"{TARGETS[target]['cosmology']}_reference_cosmology")
 
 
 def _check_kind(kind: str) -> None:

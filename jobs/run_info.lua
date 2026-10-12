@@ -6,10 +6,11 @@
 --                              or standalone/<name>.lua (TARGET=standalone)
 --   SIM_NAME OUTPUT_FOLDER RUN_ROOT BOXSIZE REDSHIFTS
 --                  RUN_ROOT = output_folder without /<target>/<model>/<realization>/
+--   NPART NSTEPS Z_INIT GRAVITY COSMOLOGY IC_FILE IC_SEED IC_FIXED IC_INVERTED   (for the job logs)
+--   COSMO_H COSMO_OMEGA_CDM COSMO_OMEGA_B COSMO_OMEGA_MNU COSMO_OMEGA_LAMBDA COSMO_TCMB COSMO_NEFF COSMO_NS   (numbers)
 --
 -- Fails if simulation_name or output_folder do not follow that naming: the halo finder and
 -- scripts/collect_products.py find a run's outputs by these names.
---   NPART NSTEPS Z_INIT GRAVITY COSMOLOGY IC_FILE IC_SEED IC_FIXED IC_INVERTED   (for the job logs)
 
 local run_file = arg[1]
 assert(run_file, "usage: lua run_info.lua <run.lua>")
@@ -71,6 +72,15 @@ end
 info.COSMOLOGY = string.format("%s, h = %s, Omega_cdm = %s, Omega_b = %s, A_s = %s, n_s = %s",
   tostring(cosmology_model), tostring(cosmology_h), tostring(cosmology_OmegaCDM),
   tostring(cosmology_Omegab), tostring(cosmology_As), tostring(cosmology_ns))
+-- Cosmology as numbers, for the halo finder (masses use the run's own cosmology)
+info.COSMO_H = cosmology_h
+info.COSMO_OMEGA_CDM = cosmology_OmegaCDM
+info.COSMO_OMEGA_B = cosmology_Omegab
+info.COSMO_OMEGA_MNU = cosmology_OmegaMNu or 0
+info.COSMO_OMEGA_LAMBDA = cosmology_OmegaLambda
+info.COSMO_TCMB = cosmology_TCMB_kelvin
+info.COSMO_NEFF = cosmology_Neffective
+info.COSMO_NS = cosmology_ns
 info.IC_FILE = ic_input_filename
 info.IC_SEED = ic_random_seed
 info.IC_FIXED = ic_fix_amplitude
@@ -78,6 +88,7 @@ info.IC_INVERTED = ic_reverse_phases
 
 for _, key in ipairs({ "RUN_LABEL", "TARGET", "MODEL", "REALIZATION", "SIM_NAME", "OUTPUT_FOLDER", "RUN_ROOT", "BOXSIZE",
                        "REDSHIFTS", "NPART", "NSTEPS", "Z_INIT", "GRAVITY", "COSMOLOGY", "IC_FILE", "IC_SEED",
-                       "IC_FIXED", "IC_INVERTED" }) do
+                       "IC_FIXED", "IC_INVERTED", "COSMO_H", "COSMO_OMEGA_CDM", "COSMO_OMEGA_B",
+                       "COSMO_OMEGA_MNU", "COSMO_OMEGA_LAMBDA", "COSMO_TCMB", "COSMO_NEFF", "COSMO_NS" }) do
   print(key .. "=" .. quote(info[key]))
 end

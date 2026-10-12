@@ -15,6 +15,8 @@
 #   cd ~/Hi-COLA && sbatch jobs/power_spectrum_abacus.sh
 
 # ---------------------------- user parameters ----------------------------
+# The estimator itself (TSC mass assignment, interlacing, shot-noise subtraction) is fixed in
+# scripts/run_abacus_power_spectrum.py.
 REDSHIFT="0.500"
 MODEL="LCDM"
 
@@ -35,6 +37,8 @@ source "$HICOLA_ROOT/jobs/hicola_env.sh"
 
 hicola_print_env
 echo "Measurement:    Abacus_Small $MODEL P(k) at z = $REDSHIFT, subsamples A=$LOAD_A B=$LOAD_B, Nmesh $NMESH, $KBINS k-bins"
+echo "Estimator:      halo + field particles, TSC, interlaced, window compensated, shot noise subtracted"
+echo "                (fixed in scripts/run_abacus_power_spectrum.py)"
 PYTHONPATH="$HICOLA_ROOT/scripts" python - "$MODEL" "$REDSHIFT" <<'EOF'
 import sys
 import hicola_paths as hp

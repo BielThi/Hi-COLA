@@ -24,7 +24,7 @@ import hicola_paths as hp
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("target", choices=sorted(hp.TARGETS))
+    parser.add_argument("target", help="e.g. COLA_NM4096, Abacus_Small")
     parser.add_argument("model")
     parser.add_argument("realization")
     args = parser.parse_args()

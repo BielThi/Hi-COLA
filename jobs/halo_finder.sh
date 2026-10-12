@@ -21,13 +21,16 @@ RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234
 # Output redshift of the snapshot to process
 REDSHIFT="0.500"
 
-# FoF / halo definition. NMIN = minimum particles per halo; so far 30 for COLA_NM4096 runs and
-# 50 for Abacus_Small runs. The box size is read from the run file; the cosmology used for the
-# masses is the reference cosmology of the run's target (both are printed at the top of the log).
-LINKING_LENGTH="0.2"
-NMIN="50"
-MDEF="200c"
+# FoF / halo definition
+LINKING_LENGTH="0.2"   # in units of the mean particle separation
+NMIN="50"              # minimum particles per halo; so far 30 for COLA_NM4096 runs, 50 for Abacus_Small runs
+MDEF="200c"            # mass definition; only 200c for now: the catalog fields (m200c, r200c) and files (halos200c_*) are named for it
+
+# HMF mass grid: "reference" = the masses of the target's reference HMF at this redshift, to
+# compare bin by bin (COLA_NM4096 only, so far); or "MIN MAX N" = N log-spaced masses in Msun/h
+HMF_MASS_GRID="1e11 1e16 60"
 # -------------------------------------------------------------------------
+# Box size and cosmology (for the halo masses) are taken from the run file.
 
 set -euo pipefail
 HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
@@ -46,18 +49,19 @@ if [ "$TARGET" = standalone ]; then
 fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
 FOF=(--linking-length "$LINKING_LENGTH" --nmin "$NMIN" --mdef "$MDEF")
+COSMOLOGY=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
+           --omega-lambda "$COSMO_OMEGA_LAMBDA" --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF" --n-s "$COSMO_NS")
+read -r -a GRID <<< "$HMF_MASS_GRID"
 
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
 echo "FoF:            linking length $LINKING_LENGTH, at least $NMIN particles, mass definition $MDEF"
-PYTHONPATH="$HICOLA_ROOT/scripts" python - "$TARGET" "$REDSHIFT" <<'EOF'
+echo "Halo masses:    computed with the run's cosmology (above)"
+PYTHONPATH="$HICOLA_ROOT/scripts" python - "$TARGET" "$REDSHIFT" "${GRID[@]}" <<'EOF'
 import sys
-import hicola_paths as hp
-from run_halo_outputs import default_mass_grid
-target, redshift = sys.argv[1], float(sys.argv[2])
-print(f"Halo cosmology: {hp.reference_cosmology(target).SOURCE}")
-print(f"HMF mass grid:  {default_mass_grid(target, redshift)[1]}")
+from run_halo_outputs import mass_grid
+print(f"HMF mass grid:  {mass_grid(sys.argv[3:], sys.argv[1], float(sys.argv[2]))[1]}")
 EOF
 echo "Resources:      ${SLURM_JOB_NUM_NODES} nodes, ${SLURM_NTASKS} MPI tasks"
 echo "================================================================"
@@ -67,8 +71,8 @@ echo "================================================================"
 unset SLURM_MEM_PER_NODE SLURM_MEM_PER_GPU SLURM_CPU_BIND SLURM_CPU_BIND_LIST SLURM_CPU_BIND_TYPE
 
 time srun --mpi=pmix --cpu-bind=none -n "${SLURM_NTASKS}" \
-    python "$HICOLA_ROOT/scripts/run_halo_catalog.py" "${RUN[@]}" "${FOF[@]}"
+    python "$HICOLA_ROOT/scripts/run_halo_catalog.py" "${RUN[@]}" "${FOF[@]}" "${COSMOLOGY[@]}"
 
-time python "$HICOLA_ROOT/scripts/run_halo_outputs.py" "${RUN[@]}"
+time python "$HICOLA_ROOT/scripts/run_halo_outputs.py" "${RUN[@]}" --mass-grid "${GRID[@]}"
 
 python "$HICOLA_ROOT/scripts/collect_products.py" "$TARGET" "$MODEL" "$REALIZATION"

@@ -170,17 +170,22 @@ sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once 
 ## 5. Halo finder and measurements
 
 - **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI): linking length, minimum members per
-  halo and mass definition set in `jobs/halo_finder.sh` (0.2; 30 for COLA_NM4096 and 50 for
-  Abacus_Small so far; M200c), box size from the run file, masses computed with the target's
-  reference cosmology (`scripts/euclid_reference_cosmology.py`,
-  `scripts/abacus_reference_cosmology.py`, chosen in `TARGETS` in `scripts/hicola_paths.py`).
+  halo and mass definition set in `jobs/halo_finder.sh` (so far 0.2; 30 for COLA_NM4096 and
+  50 for Abacus_Small; 200c, the only definition the catalog format supports). The box size
+  and the cosmology used for the masses are those of the run file.
 - **HMF** (`scripts/run_halo_outputs.py`): cumulative n(>M) and dn/dlog10M with Poisson
-  errors, on the mass grid of the target's reference HMF at the same redshift when there is
-  one (COLA_NM4096), otherwise 60 log bins from 1e11 to 1e16 Msun/h.
+  errors, on the mass grid set in `jobs/halo_finder.sh`: `reference` (the masses of the
+  target's reference HMF at the same redshift, COLA_NM4096 only) or `MIN MAX N` log bins.
+- The Python scripts have no hidden defaults: every setting is a required argument, passed by
+  the job scripts.
 - **P(k)**: Hi-COLA's own measurement on each snapshot (`pofk_z<z>.txt`, shot noise
   subtracted).
-- **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): halo + field particles
-  of subsample A (3%), TSC, Nmesh 1024, interlaced, 60 k-bins, shot noise subtracted.
+- **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): subsamples, Nmesh and
+  k-bins set in `jobs/power_spectrum_abacus.sh` (so far subsample A (3%), 1024, 60); the
+  estimator is fixed in the script: halo + field particles, TSC, interlaced, window compensated,
+  shot noise subtracted.
+- `scripts/euclid_reference_cosmology.py` and `scripts/abacus_reference_cosmology.py` hold the
+  reference cosmologies used by the HOD notebooks (they match the run files).
 - `scripts/generate_abacus_cosm000_pk.py` regenerates the Abacus initial P(k) with CLASS and
   checks its σ8.
 
@@ -216,7 +221,7 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 - `analysis as an` loads and combines measurements:
 
   ```python
-  k, P_mean, P_std = an.load_reference('COLA_NM4096', 'LCDM', 1.65, 'PS')       # mean and std over boxes
+  k, P_mean, P_std = an.load_reference('COLA_NM4096', 'LCDM', 1.65, 'PS', boxes=range(1, 11))  # mean, std over boxes
   k, r_mean, r_std = an.reference_ratio('COLA_NM4096', 'nDGP_N1.2', 'LCDM', 1.65, 'PS')
   k, P = an.load_hicola('COLA_NM4096', 'LCDM', an.PAIRED_FIXED, 1.65, 'PS')       # mean over realizations
   an.ratio(x_num, y_num, x_den, y_den), an.interp_to(...), an.within(...)
@@ -227,7 +232,7 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 
 | notebook | what it does |
 |---|---|
-| `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ. Parameters: redshift, runs (e.g. `s1234` and/or the paired-fixed mean) |
+| `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ. Parameters: redshift, runs (e.g. `s1234` and/or the paired-fixed mean), reference boxes averaged |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs. Parameters: redshift, nDGP strength, runs |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias, centrals only, RSD multipoles |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; parameters in `HOD_parameter_file_z<z>.yaml` |
@@ -254,9 +259,7 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 2. Add the folder `Backend_parameter_files/<sim>/` with run files: copy existing ones and
    change box, cosmology, initial P(k) (in `Initial_power_spectra/`), output redshifts and the
    names (section 3).
-3. Add the target to `TARGETS` in `scripts/hicola_paths.py` (box size, number of boxes,
-   reference redshifts, cosmology module, default FoF minimum size), with a
-   `scripts/<name>_reference_cosmology.py` if the cosmology is new.
+3. For the HOD notebooks, add a `scripts/<name>_reference_cosmology.py` if the cosmology is new.
 
 ## 9. Setting up on another machine
 

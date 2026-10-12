@@ -31,8 +31,15 @@ def load_table(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def load_reference_boxes(sim: str, model: str, redshift: float, kind: str, boxes=None):
-    """x and the stack (n_boxes, n_x) of a reference measurement over its boxes."""
-    boxes = boxes or range(1, hp.TARGETS[sim]["n_boxes"] + 1)
+    """x and the stack (n_boxes, n_x) of a reference measurement over the given boxes.
+
+    boxes: list of box numbers; None means every Box<n> folder of that sim and model.
+    """
+    if boxes is None:
+        folders = (hp.DATA_ROOT / "reference" / sim / model).glob("Box*")
+        boxes = sorted(int(f.name[3:]) for f in folders if f.name[3:].isdigit())
+        if not boxes:
+            raise FileNotFoundError(f"No Box<n> folders in {hp.DATA_ROOT / 'reference' / sim / model}")
     tables = [load_table(hp.reference_file(sim, model, box, redshift, kind)) for box in boxes]
     x = tables[0][0]
     for box, (xb, _) in zip(boxes, tables):
