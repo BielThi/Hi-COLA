@@ -33,9 +33,10 @@ cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")
 
 eval "$(hicola_run_info "$RUN_FILE")"
-echo "Run:    $RUN_LABEL ($SIM_NAME)"
-echo "Config: $RUN_FILE"
-echo "Output: $OUTPUT_FOLDER"
+hicola_print_env
+hicola_print_run "$RUN_FILE"
+echo "Resources:      ${SLURM_JOB_NUM_NODES} nodes, ${SLURM_NTASKS} MPI tasks"
+echo "================================================================"
 
 # If this job is submitted from inside an interactive allocation, inherited
 # SLURM_MEM_* variables can conflict with this script's --mem-per-cpu request.

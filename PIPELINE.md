@@ -133,9 +133,9 @@ partition); edit them in the script or override them on the command line.
 | script | parameters | run with |
 |---|---|---|
 | `jobs/backend.sh` | `RUN_FILE` (the run's `.lua`) | `sbatch jobs/backend.sh` |
-| `jobs/halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, FoF settings (`LINKING_LENGTH`, `NMIN`, `MDEF`) | `sbatch jobs/halo_finder.sh` |
+| `jobs/halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, FoF settings (`LINKING_LENGTH`, `NMIN`: 30 for COLA_NM4096, 50 for Abacus_Small so far, `MDEF`) | `sbatch jobs/halo_finder.sh` |
 | `jobs/power_spectrum_abacus.sh` | redshift, subsamples, mesh, k-bins of the Abacus reference P(k) | `sbatch jobs/power_spectrum_abacus.sh` |
-| `jobs/frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | `bash jobs/frontend.sh` (quick, no SLURM) |
+| `jobs/frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | `sbatch jobs/frontend.sh` (or `bash jobs/frontend.sh`, it is quick) |
 
 ```bash
 cd ~/Hi-COLA
@@ -146,8 +146,13 @@ sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once 
 ```
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
-- Logs: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`. The first lines of a backend
-  or halo-finder log name the run.
+- Logs: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`. Each log starts with what
+  was run: code commit, conda env, run and data roots, and for a backend or halo-finder job
+  the run file with its box, particles, steps, gravity, cosmology, initial P(k), seed and
+  output redshifts (plus the FoF settings, halo cosmology and HMF mass grid for the halo finder).
+- Everything else is set in the run file and its `base.lua`; the only other inputs are the
+  paths and env name in `jobs/hicola_env.sh`. The halo finder takes the box size from the
+  run file and the cosmology from the run's target.
 - At the end of the backend and halo-finder jobs, `scripts/collect_products.py` copies the
   P(k) and HMF of each output redshift to `hicola_data/hicola/` (section 6). It can be rerun
   by hand: `python scripts/collect_products.py <target> <model> <realization>`.
@@ -156,11 +161,11 @@ sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once 
 
 ## 5. Halo finder and measurements
 
-- **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI): linking length 0.2, minimum
-  members per halo 30 for COLA_NM4096 and 50 for Abacus_Small, masses M200c computed with
-  the target's reference cosmology (`scripts/euclid_reference_cosmology.py`,
-  `scripts/abacus_reference_cosmology.py`). Defaults per target: `TARGETS` in
-  `scripts/hicola_paths.py`.
+- **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI): linking length, minimum members per
+  halo and mass definition set in `jobs/halo_finder.sh` (0.2; 30 for COLA_NM4096 and 50 for
+  Abacus_Small so far; M200c), box size from the run file, masses computed with the target's
+  reference cosmology (`scripts/euclid_reference_cosmology.py`,
+  `scripts/abacus_reference_cosmology.py`, chosen in `TARGETS` in `scripts/hicola_paths.py`).
 - **HMF** (`scripts/run_halo_outputs.py`): cumulative n(>M) and dn/dlog10M with Poisson
   errors, on the mass grid of the target's reference HMF at the same redshift when there is
   one (COLA_NM4096), otherwise 60 log bins from 1e11 to 1e16 Msun/h.

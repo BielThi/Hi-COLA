@@ -33,6 +33,18 @@ if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
 fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
 
+hicola_print_env
+echo "Measurement:    Abacus_Small $MODEL P(k) at z = $REDSHIFT, subsamples A=$LOAD_A B=$LOAD_B, Nmesh $NMESH, $KBINS k-bins"
+PYTHONPATH="$HICOLA_ROOT/scripts" python - "$MODEL" "$REDSHIFT" <<'EOF'
+import sys
+import hicola_paths as hp
+model, redshift = sys.argv[1], float(sys.argv[2])
+print(f"Reads:          {hp.abacus_halo_dir(redshift)}")
+print(f"Writes:         {hp.reference_file('Abacus_Small', model, 1, redshift, 'PS')}")
+EOF
+echo "Resources:      ${SLURM_CPUS_PER_TASK} threads"
+echo "================================================================"
+
 time python "$HICOLA_ROOT/scripts/run_abacus_power_spectrum.py" \
   --redshift "${REDSHIFT}" \
   --load-A "${LOAD_A}" \

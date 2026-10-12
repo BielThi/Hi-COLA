@@ -21,10 +21,11 @@ RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234
 # Output redshift of the snapshot to process
 REDSHIFT="0.500"
 
-# FoF / halo definition. Leave NMIN empty for the target's default (TARGETS in scripts/hicola_paths.py:
-# 30 for COLA_NM4096, 50 for Abacus_Small). Box size and cosmology come from the target.
+# FoF / halo definition. NMIN = minimum particles per halo; so far 30 for COLA_NM4096 runs and
+# 50 for Abacus_Small runs. The box size is read from the run file; the cosmology used for the
+# masses is the reference cosmology of the run's target (both are printed at the top of the log).
 LINKING_LENGTH="0.2"
-NMIN=""
+NMIN="50"
 MDEF="200c"
 # -------------------------------------------------------------------------
 
@@ -43,10 +44,23 @@ if [ "$TARGET" = standalone ]; then
     echo "The halo finder needs a run matched to a reference simulation, not $RUN_LABEL" >&2
     exit 1
 fi
-RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT")
-FOF=(--linking-length "$LINKING_LENGTH" --mdef "$MDEF")
-if [ -n "$NMIN" ]; then FOF+=(--nmin "$NMIN"); fi
-echo "Run: $RUN_LABEL ($SIM_NAME) at z=$REDSHIFT"
+RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
+FOF=(--linking-length "$LINKING_LENGTH" --nmin "$NMIN" --mdef "$MDEF")
+
+hicola_print_env
+hicola_print_run "$RUN_FILE"
+echo "Snapshot z:     $REDSHIFT"
+echo "FoF:            linking length $LINKING_LENGTH, at least $NMIN particles, mass definition $MDEF"
+PYTHONPATH="$HICOLA_ROOT/scripts" python - "$TARGET" "$REDSHIFT" <<'EOF'
+import sys
+import hicola_paths as hp
+from run_halo_outputs import default_mass_grid
+target, redshift = sys.argv[1], float(sys.argv[2])
+print(f"Halo cosmology: {hp.reference_cosmology(target).SOURCE}")
+print(f"HMF mass grid:  {default_mass_grid(target, redshift)[1]}")
+EOF
+echo "Resources:      ${SLURM_JOB_NUM_NODES} nodes, ${SLURM_NTASKS} MPI tasks"
+echo "================================================================"
 
 # If this job is submitted from inside an interactive allocation, inherited
 # SLURM_MEM_* variables can conflict with this script's --mem-per-cpu request.

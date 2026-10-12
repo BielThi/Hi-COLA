@@ -35,3 +35,31 @@ fi
 hicola_run_info() {
     lua "$HICOLA_ROOT/jobs/run_info.lua" "$1"
 }
+
+# Header of the job logs: code version and where everything is read from and written to
+hicola_print_env() {
+    local commit
+    commit=$(git -C "$HICOLA_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    if [ -n "$(git -C "$HICOLA_ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        commit="$commit + uncommitted changes"
+    fi
+    echo "================================================================"
+    echo "Job:            ${SLURM_JOB_NAME:-interactive} ${SLURM_JOB_ID:-}  ($(date '+%Y-%m-%d %H:%M'))"
+    echo "Hi-COLA:        $HICOLA_ROOT  (commit $commit)"
+    echo "Conda env:      ${CONDA_DEFAULT_ENV:-none}"
+    echo "Run root:       $HICOLA_RUN_ROOT"
+    echo "Data root:      $HICOLA_DATA_ROOT"
+}
+
+# Settings of the run whose run_info was loaded with eval "$(hicola_run_info ...)"
+hicola_print_run() {
+    echo "Run file:       $1"
+    echo "Run:            $RUN_LABEL  (simulation_name = $SIM_NAME)"
+    echo "Box:            $BOXSIZE Mpc/h, ${NPART}^3 particles, $NSTEPS time steps from z = $Z_INIT"
+    echo "Gravity:        $GRAVITY"
+    echo "Cosmology:      $COSMOLOGY"
+    echo "Initial P(k):   $IC_FILE"
+    echo "Realization:    seed $IC_SEED, fixed amplitude $IC_FIXED, reversed phases $IC_INVERTED"
+    echo "Output z:       $REDSHIFTS"
+    echo "Output folder:  $OUTPUT_FOLDER"
+}
