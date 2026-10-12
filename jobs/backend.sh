@@ -1,4 +1,7 @@
 #!/bin/bash
+#SBATCH --job-name=backend
+#SBATCH -o HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 8
 #SBATCH -n 512
 #SBATCH --mem-per-cpu=6G
@@ -7,13 +10,28 @@
 #SBATCH --partition=academic
 #SBATCH --exclusive
 # Run one Hi-COLA backend simulation, then copy its P(k) to $HICOLA_DATA_ROOT/hicola/.
-# Submit it with jobs/submit_backend.sh <run.lua> [sbatch options].
+#
+# Edit the parameters below, then submit from the Hi-COLA folder:
+#   cd ~/Hi-COLA && sbatch jobs/backend.sh
+# A run file given on the command line replaces RUN_FILE:  sbatch jobs/backend.sh <run.lua>
+
+# ---------------------------- user parameters ----------------------------
+# Run file, relative to the Hi-COLA folder (or absolute). It sets the model, realization,
+# output folder and all simulation settings, see PIPELINE.md.
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
+# -------------------------------------------------------------------------
 
 set -euo pipefail
-: "${HICOLA_ROOT:?submit this job with jobs/submit_backend.sh}"
+RUN_FILE=${1:-$RUN_FILE}
+HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
+if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
+    echo "Submit this job from the Hi-COLA folder: cd <Hi-COLA> && sbatch jobs/backend.sh" >&2
+    exit 1
+fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
+cd "$HICOLA_ROOT"
+RUN_FILE=$(readlink -f "$RUN_FILE")
 
-RUN_FILE=$1
 eval "$(hicola_run_info "$RUN_FILE")"
 echo "Run:    $RUN_LABEL ($SIM_NAME)"
 echo "Config: $RUN_FILE"

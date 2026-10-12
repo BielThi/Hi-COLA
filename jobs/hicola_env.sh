@@ -1,4 +1,4 @@
-# Environment shared by the Hi-COLA pipeline jobs. Source it (the submit_*.sh scripts do).
+# Environment shared by the Hi-COLA pipeline jobs (sourced by jobs/*.sh).
 # Every variable can be set beforehand to override its default, e.g. on another machine:
 #   export HICOLA_RUN_ROOT=/scratch/other/Hi-COLA_Output
 

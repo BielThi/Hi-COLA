@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run the expensive nbodykit FOF halo-finding step.
 
-This script is intended to be launched with MPI, normally through jobs/halo_finder.sh
-(submitted with jobs/submit_halo_finder.sh), for example:
+This script is intended to be launched with MPI, normally through jobs/halo_finder.sh,
+for example:
 
     srun -n 72 python scripts/run_halo_catalog.py --target Abacus_Small --model LCDM \
         --realization s1234 --redshift 0.5

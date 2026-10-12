@@ -1,4 +1,7 @@
 #!/bin/bash
+#SBATCH --job-name=power_spectrum_abacus
+#SBATCH -o HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=16
@@ -7,11 +10,9 @@
 #SBATCH --partition=academic
 # Matter P(k) of the Abacus_Small reference box, written to
 # $HICOLA_DATA_ROOT/reference/Abacus_Small/LCDM/Box1/Abacus_Small_LCDM_Box1_z<z>_PS.txt.
-# Submit it with jobs/submit_power_spectrum_abacus.sh [sbatch options].
-
-set -euo pipefail
-: "${HICOLA_ROOT:?submit this job with jobs/submit_power_spectrum_abacus.sh}"
-source "$HICOLA_ROOT/jobs/hicola_env.sh"
+#
+# Edit the parameters below, then submit from the Hi-COLA folder:
+#   cd ~/Hi-COLA && sbatch jobs/power_spectrum_abacus.sh
 
 # ---------------------------- user parameters ----------------------------
 REDSHIFT="0.500"
@@ -23,6 +24,14 @@ LOAD_B=0  # load subsample B (7%); combine with A for the full 10% subsample
 NMESH="1024"  # was 512; k_max = pi*NMESH/Lbox, raised to push the Nyquist cutoff further out
 KBINS="60"    # independent of NMESH: fixes the mostly-empty/noisy low-k bins from before
 # -------------------------------------------------------------------------
+
+set -euo pipefail
+HICOLA_ROOT=${HICOLA_ROOT:-$SLURM_SUBMIT_DIR}
+if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
+    echo "Submit this job from the Hi-COLA folder: cd <Hi-COLA> && sbatch jobs/power_spectrum_abacus.sh" >&2
+    exit 1
+fi
+source "$HICOLA_ROOT/jobs/hicola_env.sh"
 
 time python "$HICOLA_ROOT/scripts/run_abacus_power_spectrum.py" \
   --redshift "${REDSHIFT}" \

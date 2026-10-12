@@ -1,5 +1,8 @@
 Hi-COLA_Output/
-HiCOLA/Output/
+HiCOLA/Output/*
+!HiCOLA/Output/logs/
+HiCOLA/Output/logs/*
+!HiCOLA/Output/logs/.gitkeep
 __pycache__/
 *.py[cod]
 *.o

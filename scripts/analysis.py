@@ -73,8 +73,8 @@ def hicola_measurement_file(target: str, model: str, realization: str, redshift:
             return path
     raise FileNotFoundError(
         f"No {kind} for {target}/{model}/{realization} at z={redshift:.3f}: neither {run_file} nor "
-        f"{kept_file} exists. Run jobs/submit_backend.sh"
-        + (" and jobs/submit_halo_finder.sh" if kind == "HMF" else "")
+        f"{kept_file} exists. Run jobs/backend.sh"
+        + (" and jobs/halo_finder.sh" if kind == "HMF" else "")
         + f" on {hp.run_file(target, model, realization)}."
     )
 

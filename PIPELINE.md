@@ -125,32 +125,34 @@ in git.
 
 ## 4. Running
 
-From the repository folder. Extra arguments go to `sbatch`; the defaults in the `#SBATCH`
-lines of the job scripts are the production settings on jed (academic partition).
+Each job script in `jobs/` has a **user parameters** block at the top: edit it, then submit
+the script with `sbatch` **from the Hi-COLA folder** (the jobs find the repository and write
+their logs relative to it). The `#SBATCH` lines are the production settings on jed (academic
+partition); edit them in the script or override them on the command line.
+
+| script | parameters | run with |
+|---|---|---|
+| `jobs/backend.sh` | `RUN_FILE` (the run's `.lua`) | `sbatch jobs/backend.sh` |
+| `jobs/halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, FoF settings (`LINKING_LENGTH`, `NMIN`, `MDEF`) | `sbatch jobs/halo_finder.sh` |
+| `jobs/power_spectrum_abacus.sh` | redshift, subsamples, mesh, k-bins of the Abacus reference P(k) | `sbatch jobs/power_spectrum_abacus.sh` |
+| `jobs/frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | `bash jobs/frontend.sh` (quick, no SLURM) |
 
 ```bash
-# backend (default 8 nodes, 512 tasks, 5 h)
-jobs/submit_backend.sh HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua
-jobs/submit_backend.sh <run.lua> -N 2 -n 128 --time=1:00:00
-
-# halo finder: FoF + HMF + HODDIES array, one job per output redshift (or give one redshift)
-jobs/submit_halo_finder.sh <run.lua>
-jobs/submit_halo_finder.sh <run.lua> 0.5 --dependency=afterok:<backend job id>
-
-# Abacus_Small reference P(k) (parameters at the top of jobs/power_spectrum_abacus.sh)
-jobs/submit_power_spectrum_abacus.sh
-
-# frontend: writes <model>_<cosmology>_{expansion,force}.txt to HiCOLA/Output/
-jobs/frontend.sh HiCOLA/Parameter_files/Frontend_parameter_files/examples/cubic_Galileon/cuGal_f0p2.ini \
-                 HiCOLA/Parameter_files/Frontend_parameter_files/examples/WMAP_cosmological_parameters.ini
+cd ~/Hi-COLA
+sbatch jobs/backend.sh                                        # RUN_FILE from the script
+sbatch -N 2 -n 128 --time=1:00:00 jobs/backend.sh             # other resources
+sbatch jobs/backend.sh <run.lua>                              # a run file on the command line replaces RUN_FILE
+sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once the backend is done
 ```
 
-- Logs: `HiCOLA/Output/COLA/<target>/<model>/<realization>/logs/` (`standalone/<name>/logs/`
-  for standalone runs, `HiCOLA/Output/logs/` for the Abacus P(k)).
+- The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
+- Logs: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`. The first lines of a backend
+  or halo-finder log name the run.
 - At the end of the backend and halo-finder jobs, `scripts/collect_products.py` copies the
   P(k) and HMF of each output redshift to `hicola_data/hicola/` (section 6). It can be rerun
   by hand: `python scripts/collect_products.py <target> <model> <realization>`.
-- `jobs/run_info.lua <run.lua>` prints a run's name, output folder, box size and redshifts.
+- `lua jobs/run_info.lua <run.lua>` prints a run's name, output folder, box size and
+  redshifts (with the `hicola` env active).
 
 ## 5. Halo finder and measurements
 
@@ -251,7 +253,7 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
    `#SBATCH` lines in `jobs/*.sh` (partition, cores per node, `--exclusive`) to the cluster.
 4. Check with a small run, e.g. a copy of a run file with `particle_Npart_1D = 192`,
    `timestep_nsteps = {10}` and the derived meshes overridden, submitted with
-   `-N 1 -n 16 --time=0:30:00`.
+   `sbatch -N 1 -n 16 --time=0:30:00 jobs/backend.sh <that file>`.
 
 ## 10. Known issues
 
