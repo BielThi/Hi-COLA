@@ -39,19 +39,19 @@ def log(message: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--redshift", type=float, default=0.5, help="Used for the default --path-to-sim")
+    parser.add_argument("--redshift", type=float, required=True, help="Used for the default --path-to-sim")
     parser.add_argument(
         "--path-to-sim",
         default=None,
         help="CompaSOHaloCatalog redshift directory (default: the Abacus_Small raw data at --redshift)",
     )
-    parser.add_argument("--load-A", type=int, choices=(0, 1), default=1, help="Load subsample A (3%%)")
-    parser.add_argument("--load-B", type=int, choices=(0, 1), default=0, help="Load subsample B (7%%)")
-    parser.add_argument("--nmesh", type=int, default=512)
+    parser.add_argument("--load-A", type=int, choices=(0, 1), required=True, help="Load subsample A (3%%)")
+    parser.add_argument("--load-B", type=int, choices=(0, 1), required=True, help="Load subsample B (7%%)")
+    parser.add_argument("--nmesh", type=int, required=True, help="mesh size; k_max = pi * nmesh / boxsize")
     parser.add_argument(
         "--kbins",
         type=int,
-        default=60,
+        required=True,
         help=(
             "Number of output k-bins, independent of --nmesh. A 500 Mpc/h-scale box has "
             "few independent Fourier modes near k_min, so using nmesh as the bin count "
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--nthread", type=int, default=None, help="Default: all available cores")
-    parser.add_argument("--model", default="LCDM")
+    parser.add_argument("--model", required=True, help="model name used in the output file name, e.g. LCDM")
     parser.add_argument(
         "--output",
         default=None,
