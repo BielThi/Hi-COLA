@@ -18,7 +18,7 @@
 # The estimator itself (TSC mass assignment, interlacing, shot-noise subtraction) is fixed in
 # scripts/run_abacus_power_spectrum.py.
 REDSHIFT="0.500"
-MODEL="LCDM"
+MODEL="LCDM"  # only names the output file; the Abacus_Small box is ΛCDM only
 
 LOAD_A=1  # load subsample A (3%)
 LOAD_B=0  # load subsample B (7%); combine with A for the full 10% subsample

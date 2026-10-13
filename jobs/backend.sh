@@ -19,7 +19,7 @@
 # ---------------------------- user parameters ----------------------------
 # Run file, relative to the Hi-COLA folder (or absolute). It sets the model, realization,
 # output folder and all simulation settings, see PIPELINE.md.
-RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_s1234.lua"
 # -------------------------------------------------------------------------
 
 set -euo pipefail
