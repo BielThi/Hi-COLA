@@ -103,7 +103,7 @@ Environment variables (all optional; defaults in `jobs/hicola_env.sh` and
 **Conda env `hicola`** (Python 3.11; not described by a file in the repository, create it on
 each machine). Packages used: `nbodykit` (FoF, P(k)), `mpi4py`, `abacusutils` (Abacus
 catalogs), `cosmoprimo` + `pyclass` (CLASS), `numba`, `numpy`, `scipy`, `pandas`,
-`matplotlib`, `astropy`, `fitsio`, `pynbody`, `h5py`, `sympy` + `configobj` (frontend),
+`matplotlib`, `astropy`, `fitsio`, `pynbody`, `h5py`, `hdf5plugin` (imported by HODDIES), `sympy` + `configobj` (frontend),
 `jupyter`, `nbstripout`, plus FFTW (with MPI and threads), GSL, Lua (the `lua` command is
 used by the jobs) and an MPI compiler wrapper (`mpicxx`) to build the backend. The jobs
 activate the env themselves.
@@ -205,6 +205,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `NAME` | 1 task, 32 threads, 30 min, QOS `shared` | `sbatch jobs/hod_mock.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -234,8 +235,8 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   particles, steps, z_init, gravity, cosmology, initial P(k), seed, fixed/inverted, output
   redshifts and output folder; for the halo finder also the FoF settings and HMF mass grid;
   for the Abacus P(k) its settings, input and output paths; for the frontend the `.ini` files.
-- **Kept results**: at the end of the backend and halo-finder jobs,
-  `scripts/collect_products.py` copies the P(k) and HMF of each output redshift to
+- **Kept results**: at the end of the backend, halo-finder and HOD-mock jobs,
+  `scripts/collect_products.py` copies the P(k), HMF and HOD mocks of each output redshift to
   `hicola_data/hicola/` (section 8). It can be rerun by hand:
   `python scripts/collect_products.py <target> <model> <realization>`.
 - `lua jobs/run_info.lua <run.lua>` (env active) prints a run's identity and settings, or the
@@ -290,6 +291,14 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   (FoF particles), `halo_id`; `.json` with box size, redshift, FoF settings, particle mass and
   cosmology.
 - **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`.
+- **HOD mock** `halo_catalog/hod/<name>.fits` (`jobs/hod_mock.sh`, `scripts/run_hod_mock.py`),
+  kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits`: the format of the EMC AbacusHOD mocks
+  (`/pscratch/sd/e/epaillas/emc/hods/z0.5/yuan23_prior/small/hod*/ph*_hod*.fits`). One binary
+  table, centrals first then satellites: `X Y Z` [Mpc/h, real space, in [-L/2, L/2)],
+  `VX VY VZ` [km/s], `MASS` [Msun/h] and `ID` of the host halo, `IS_CENT` (1.0/0.0). Header:
+  `N_CENT`, `GAL_TYPE`, the tracer's HODDIES parameters (not the AbacusHOD ones of the EMC
+  files), `SIM_NAME`, `REDSHIFT`, `BOXSIZE`, `SEED`, `NTHREADS`, `HOD_FILE`. The mock of a seed
+  also depends on `NTHREADS`.
 
 ## 9. Notebooks
 

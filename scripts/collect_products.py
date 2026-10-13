@@ -5,9 +5,10 @@ For every snapshot_<simulation_name>_z<z>/ of the run it copies, when present:
 
     pofk_z<z>.txt                    -> HiCOLA_<simulation_name>_z<z>_PS.txt
     halo_catalog/halos200c_hmf.txt   -> HiCOLA_<simulation_name>_z<z>_HMF.txt   (+ .json)
+    halo_catalog/hod/<name>.fits     -> HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits
 
 Scratch is cleaned up automatically; these copies are the ones to keep. Called at the end of
-jobs/backend.sh and jobs/halo_finder.sh, and safe to rerun.
+jobs/backend.sh, jobs/halo_finder.sh and jobs/hod_mock.sh, and safe to rerun.
 
     python scripts/collect_products.py Abacus_Small nDGP_N1.2 s1234-fixed
 """
@@ -58,6 +59,12 @@ def main() -> int:
                     shutil.copy2(source, target)
                     print(f"{source} -> {target}")
                     copied += 1
+        for mock in sorted((hp.halo_catalog_dir(*run, redshift) / "hod").glob("*.fits")):
+            destination = hp.hicola_hod_file(*run, redshift, mock.stem)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(mock, destination)
+            print(f"{mock} -> {destination}")
+            copied += 1
 
     print(f"Copied {copied} file(s) to {hp.hicola_dir(*run)}")
     return 0

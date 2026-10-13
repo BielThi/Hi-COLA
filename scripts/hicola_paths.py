@@ -98,6 +98,11 @@ def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hmf.txt"
 
 
+def hod_mock_file(target: str, model: str, realization: str, redshift: float, name: str) -> Path:
+    """HOD galaxy mock in the EMC FITS format (scripts/run_hod_mock.py)."""
+    return halo_catalog_dir(target, model, realization, redshift) / "hod" / f"{name}.fits"
+
+
 def log_dir(target: str, model: str, realization: str) -> Path:
     return OUTPUT_DIR / "COLA" / target / model / realization / "logs"
 
@@ -118,6 +123,12 @@ def hicola_file(target: str, model: str, realization: str, redshift: float, kind
     _check_kind(kind)
     name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_{kind}.txt"
     return hicola_dir(target, model, realization) / name
+
+
+def hicola_hod_file(target: str, model: str, realization: str, redshift: float, name: str) -> Path:
+    """Kept copy of a HOD galaxy mock."""
+    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_{name}.fits"
+    return hicola_dir(target, model, realization) / file_name
 
 
 # ---------------------------------------------------------------- reference simulations
