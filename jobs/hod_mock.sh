@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=hod_mock
-#SBATCH -o /global/homes/b/bielthi/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /global/homes/b/bielthi/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=32
+#SBATCH --mem-per-cpu=6G
 #SBATCH --time=0:30:00
-#SBATCH --constraint=cpu
-#SBATCH --qos=shared
-#SBATCH --account=desi
+#SBATCH --partition=academic
 # HODDIES galaxy mock on the halo array of one snapshot of a Hi-COLA run, written in the format
 # of the EMC AbacusHOD mocks (FITS, see scripts/run_hod_mock.py), then copied to
 # $HICOLA_DATA_ROOT/hicola/.

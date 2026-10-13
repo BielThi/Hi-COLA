@@ -205,7 +205,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `NAME` | 1 task, 32 threads, 30 min, QOS `shared` | `sbatch jobs/hod_mock.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 30 min | `sbatch jobs/hod_mock.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -385,6 +385,12 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 4. Adapt the other `#SBATCH` lines (partition, cores per node, `--exclusive`, memory per
    core, time) to the cluster (section 12), and the launcher (`mpirun` in `backend.sh`,
    `srun --mpi=pmix` in `halo_finder.sh`) if needed.
+
+   The repository keeps **jed's** `#SBATCH` lines (and log paths). On another cluster (e.g.
+   Perlmutter: `--account`, `--qos`, `--constraint` instead of `--partition`, logs under its
+   home), keep these edits local and don't commit them: before a `git pull`, set them aside
+   with `git stash`, then `git stash pop` and resolve if a pulled change touches the same
+   lines. New job scripts are committed with jed's values.
 5. Test with a small run: copy a run file with `particle_Npart_1D = 192`,
    `timestep_nsteps = {10}` and a test `output_folder`/`simulation_name` (keeping the naming),
    then `sbatch -N 1 -n 16 --time=0:30:00 --mem-per-cpu=4G jobs/backend.sh <that file>` and
