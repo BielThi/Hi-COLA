@@ -17,7 +17,7 @@
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation to process, relative to the Hi-COLA folder (or absolute)
-RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_s1234.lua"
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
 # Output redshift of the snapshot to process
 REDSHIFT="0.500"
 
