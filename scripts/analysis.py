@@ -98,6 +98,38 @@ def load_hicola(target: str, model: str, realizations, redshift: float, kind: st
     return x, np.mean([y for _, y in tables], axis=0)
 
 
+def load_hod_spectrum(target: str, model: str, realization: str, redshift: float, name: str, dk: float):
+    """Redshift-space multipoles of a HOD mock (jobs/hod_mock.sh), rebinned to bins of width dk.
+
+    Reads the run folder on scratch, or the kept copy in hicola_data. Returns k (mode-weighted
+    mean of each bin) and {ell: P_ell}, averaged over the fine bins with weights N_modes; the
+    k = 0 mode and empty bins are left out.
+    """
+    run_file = hp.hod_spectrum_file(target, model, realization, redshift, name)
+    kept_file = hp.hicola_hod_spectrum_file(target, model, realization, redshift, name)
+    path = run_file if run_file.exists() else kept_file
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No HOD P(k) '{name}' for {target}/{model}/{realization} at z={redshift:.3f}: neither "
+            f"{run_file} nor {kept_file} exists. Run jobs/hod_mock.sh on {hp.run_file(target, model, realization)}."
+        )
+    with open(path) as handle:
+        header = handle.readline()
+    ells = [int(word[1:].split("[")[0]) for word in header.split() if word.startswith("P") and "[" in word]
+    table = np.loadtxt(path, comments="#", ndmin=2)
+    k, nmodes = table[:, 0], table[:, 1]
+    use = (k > 0) & (nmodes > 0)
+    index = np.floor(k[use] / dk).astype(int)
+    weights = np.bincount(index, weights=nmodes[use])
+    filled = weights > 0
+    k_binned = np.bincount(index, weights=k[use] * nmodes[use])[filled] / weights[filled]
+    poles = {
+        ell: np.bincount(index, weights=table[use, 2 + i] * nmodes[use])[filled] / weights[filled]
+        for i, ell in enumerate(ells)
+    }
+    return k_binned, poles
+
+
 # ---------------------------------------------------------------- combining
 
 

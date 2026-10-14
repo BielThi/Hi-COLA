@@ -335,6 +335,7 @@ imports:
   k, P_mean, P_std = an.load_reference('COLA_NM4096', 'LCDM', 1.65, 'PS', boxes=range(1, 11))
   k, r_mean, r_std = an.reference_ratio('COLA_NM4096', 'nDGP_N1.2', 'LCDM', 1.65, 'PS', boxes=range(1, 11))
   k, P = an.load_hicola('COLA_NM4096', 'LCDM', an.PAIRED_FIXED, 1.65, 'PS')   # mean over realizations
+  k, P = an.load_hod_spectrum('Abacus_Small', 'LCDM', 's1234', 0.5, 'LRG_seed42', dk=0.01)  # HOD P(k), {ell: P_ell}
   an.ratio(x_num, y_num, x_den, y_den), an.interp_to(...), an.within(...)
   ```
 
@@ -346,6 +347,7 @@ imports:
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
+| `marked.ipynb` | S_X(k) = X_nDGP/X_GR − 1 for X = P₀, P₂ of the HOD galaxy P(k) (`hod_mock.sh`) | target, redshift, realization, HOD name, models, ells, dk (rebinning), k_max |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` | table names |
 | `scan.ipynb` | scan of the nDGP frontend parameters | template `Frontend_parameter_files/nDGP_scan/nDGP_scan.ini` |
