@@ -287,18 +287,22 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   σ_n(>M), dn/dlog10M, σ, counts(>M), counts per bin. A `.json` next to a file holds its
   metadata (run, settings, cosmology, mass grid source).
 - **Halo catalog** `halos200c_catalog.npy`: structured array with `x y z` [Mpc/h], `vx vy vz`
-  [km/s], `m200c`, `log10_m200c` [Msun/h], `r200c`, `rs` [kpc/h], `c`, `vrms`, `length`
+  and `vrms` [km/s, **Gadget convention v_pec/√a**, see section 14], `m200c`, `log10_m200c`
+  [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
   (FoF particles), `halo_id`; `.json` with box size, redshift, FoF settings, particle mass and
   cosmology.
-- **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`.
+- **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`
+  (velocities in the same Gadget convention).
 - **HOD mock** `halo_catalog/hod/<name>.fits` (`jobs/hod_mock.sh`, `scripts/run_hod_mock.py`),
   kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits`: the format of the EMC AbacusHOD mocks
   (`/pscratch/sd/e/epaillas/emc/hods/z0.5/yuan23_prior/small/hod*/ph*_hod*.fits`). One binary
   table, centrals first then satellites: `X Y Z` [Mpc/h, real space, in [-L/2, L/2)],
-  `VX VY VZ` [km/s], `MASS` [Msun/h] and `ID` of the host halo, `IS_CENT` (1.0/0.0). Header:
-  `N_CENT`, `GAL_TYPE`, the tracer's HODDIES parameters (not the AbacusHOD ones of the EMC
-  files), `SIM_NAME`, `REDSHIFT`, `BOXSIZE`, `SEED`, `NTHREADS`, `HOD_FILE`. The mock of a seed
-  also depends on `NTHREADS`.
+  `VX VY VZ` [peculiar km/s], `MASS` [Msun/h] and `ID` of the host halo, `IS_CENT` (1.0/0.0).
+  Header: `N_CENT`, `GAL_TYPE`, the tracer's HODDIES parameters (not the AbacusHOD ones of the
+  EMC files), `SIM_NAME`, `REDSHIFT`, `BOXSIZE`, `SEED`, `NTHREADS`, `HOD_FILE`, `VEL_DEF`
+  (`peculiar km/s`). The mock of a seed also depends on `NTHREADS`. `run_hod_mock.py` converts
+  the halo velocities and dispersions to peculiar ones (× √a) before making the mock; mocks made
+  before 2026-10-14 have no `VEL_DEF` and velocities too large by √(1+z).
 
 ## 9. Notebooks
 
@@ -432,6 +436,14 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 - The COLA_NM4096 reference HMF is spherical-overdensity with an unstated Δ; Hi-COLA HMFs are
   FoF + M200c.
 - Abacus_Small has no reference HMF yet.
+- **Halo velocities are in the Gadget convention, v_pec/√a**, not peculiar km/s: Hi-COLA writes
+  its snapshots that way and `scripts/run_halo_catalog.py` uses nbodykit's `GadgetVelocity`
+  unchanged (the catalog metadata says "km/s"). Positions, masses, HMFs and real-space
+  measurements are unaffected. `jobs/hod_mock.sh` converts to peculiar velocities; anything
+  else using the halo velocities in redshift space is too large by √(1+z) (1.22 at z = 0.5): the
+  RSD multipoles in `LRG_Abacus_Small.ipynb` and HODDIES clustering with RSD in the HOD
+  notebooks. Fixing it in the halo finder (`gadget["Velocity"] = gadget["GadgetVelocity"] * √a`)
+  would also require removing the conversion in `run_hod_mock.py`.
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History

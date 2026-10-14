@@ -8,6 +8,13 @@ Output: halo_catalog/hod/<name>.fits, the format of the EMC AbacusHOD mocks
         IS_CENT; centrals first; header N_CENT, GAL_TYPE, the HOD parameters of the tracer
         and the settings of the mock.
 
+Velocities: the halo arrays carry Gadget velocities, v_pec / sqrt(a) (Hi-COLA writes its snapshots
+in that convention and nbodykit reads them unchanged), while the EMC format needs peculiar
+velocities in km/s. The halo velocities (vx, vy, vz) and dispersions (Vrms) are therefore
+multiplied by sqrt(a) before the mock is made, so the satellites get consistent velocities too.
+If the halo finder is changed to write peculiar velocities, remove this conversion
+(to_peculiar_velocities).
+
 The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
 `density`, HODDIES rescales Ac (and the satellites with it) to reach that number density.
 The mock depends on the seed and on the number of threads (HODDIES seeds each block of halos).
@@ -61,11 +68,21 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def to_peculiar_velocities(halos: np.ndarray, redshift: float) -> float:
+    """Convert the Gadget velocities of a halo array (v_pec / sqrt(a)) to peculiar km/s, in place."""
+    factor = np.sqrt(1.0 / (1.0 + redshift))
+    for field in ("vx", "vy", "vz", "Vrms"):
+        halos[field] = halos[field] * factor
+    return factor
+
+
 def main() -> int:
     args = parse_args()
     HOD = import_hoddies()
 
     halos = np.load(args.halo_array)
+    factor = to_peculiar_velocities(halos, args.redshift)
+    print(f"Velocities:     halo vx, vy, vz, Vrms multiplied by sqrt(a) = {factor:.4f} (Gadget -> peculiar km/s)")
     metadata = load_catalog_metadata(hp.halo_catalog_file(args.target, args.model, args.realization, args.redshift))
     if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
         raise SystemExit(f"--boxsize {args.boxsize} differs from the halo catalog's {metadata['boxsize']}")
@@ -99,6 +116,7 @@ def main() -> int:
             "SEED": args.seed,
             "NTHREADS": hod.args["nthreads"],
             "HOD_FILE": args.hod_param_file.name,
+            "VEL_DEF": "peculiar km/s",
         },
     )
     n_gal = len(mock["x"])
