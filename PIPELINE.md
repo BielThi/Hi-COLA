@@ -103,7 +103,9 @@ Environment variables (all optional; defaults in `jobs/hicola_env.sh` and
 **Conda env `hicola`** (Python 3.11; not described by a file in the repository, create it on
 each machine). Packages used: `nbodykit` (FoF, P(k)), `mpi4py`, `abacusutils` (Abacus
 catalogs), `cosmoprimo` + `pyclass` (CLASS), `numba`, `numpy`, `scipy`, `pandas`,
-`matplotlib`, `astropy`, `fitsio`, `pynbody`, `h5py`, `hdf5plugin` (imported by HODDIES), `sympy` + `configobj` (frontend),
+`matplotlib`, `astropy`, `fitsio`, `pynbody`, `h5py`, `hdf5plugin` (imported by HODDIES), `jax` +
+`jax-power` (`pip install "jax-power @ git+https://github.com/adematti/jax-power.git"`, with
+`lsstypes`; for the HOD P(k)), `sympy` + `configobj` (frontend),
 `jupyter`, `nbstripout`, plus FFTW (with MPI and threads), GSL, Lua (the `lua` command is
 used by the jobs) and an MPI compiler wrapper (`mpicxx`) to build the backend. The jobs
 activate the env themselves.
@@ -205,7 +207,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 30 min | `sbatch jobs/hod_mock.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `NAME` | 1 task, 32 threads, 6 GB/thread, 30 min | `sbatch jobs/hod_mock.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -236,7 +238,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   redshifts and output folder; for the halo finder also the FoF settings and HMF mass grid;
   for the Abacus P(k) its settings, input and output paths; for the frontend the `.ini` files.
 - **Kept results**: at the end of the backend, halo-finder and HOD-mock jobs,
-  `scripts/collect_products.py` copies the P(k), HMF and HOD mocks of each output redshift to
+  `scripts/collect_products.py` copies the P(k), HMF and HOD galaxy P(k) of each output redshift to
   `hicola_data/hicola/` (section 8). It can be rerun by hand:
   `python scripts/collect_products.py <target> <model> <realization>`.
 - `lua jobs/run_info.lua <run.lua>` (env active) prints a run's identity and settings, or the
@@ -257,6 +259,14 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   `MIN MAX N` (N log-spaced masses in Msun/h). It also writes the HODDIES halo array.
 - **P(k) of the runs**: Hi-COLA's own measurement on each snapshot, `pofk_z<z>.txt`, shot
   noise subtracted, settings from the run file (`pofk_*` lines).
+- **HOD galaxy P(k)** (`jobs/hod_mock.sh`: `scripts/run_hod_mock.py`,
+  `scripts/galaxy_power_spectrum.py`): a HODDIES mock of the chosen tracer is made from the halo
+  array, shifted to redshift space along `LOS` by v/(aH(z)) with H(z) of the run's cosmology, and
+  measured with the estimator of the EMC/acm pipeline (copied from acm's
+  `scripts/emc/measurements/abacus_small.py`): jaxpower, TSC, interlacing 3, compensation, shot
+  noise from jaxpower; `MESHSIZE`, `ELLS`, `K_STEP` from the job (EMC values: 512, 0 2 4, 0.001),
+  so it compares directly with the EMC measurements. If acm changes its estimator, the copy
+  does not follow. Runs on CPU (jax).
 - **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): halo + field particles
   of the chosen subsamples (A = 3%, B = 7%), TSC, interlaced, window compensated, shot noise
   subtracted (these estimator choices are fixed in the script); Nmesh and k-bins from the job
@@ -296,15 +306,14 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   halo finder.
 - **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`
   (peculiar velocities).
-- **HOD mock** `halo_catalog/hod/<name>.fits` (`jobs/hod_mock.sh`, `scripts/run_hod_mock.py`),
-  kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits`: the format of the EMC AbacusHOD mocks
-  (`/pscratch/sd/e/epaillas/emc/hods/z0.5/yuan23_prior/small/hod*/ph*_hod*.fits`). One binary
-  table, centrals first then satellites: `X Y Z` [Mpc/h, real space, in [-L/2, L/2)],
-  `VX VY VZ` [peculiar km/s], `MASS` [Msun/h] and `ID` of the host halo, `IS_CENT` (1.0/0.0).
-  Header: `N_CENT`, `GAL_TYPE`, the tracer's HODDIES parameters (not the AbacusHOD ones of the
-  EMC files), `SIM_NAME`, `REDSHIFT`, `BOXSIZE`, `SEED`, `NTHREADS`, `HOD_FILE`, `VEL_DEF`
-  (`peculiar km/s`). The mock of a seed also depends on `NTHREADS`. Mocks without `VEL_DEF` were
-  made before the velocity fix and have velocities too large by √(1+z).
+- **HOD galaxy P(k)** `halo_catalog/hod/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
+  `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt`: the
+  redshift-space power spectrum multipoles of a HODDIES mock, columns k [h/Mpc], N_modes,
+  P_0, P_2, P_4 [(Mpc/h)³, shot noise subtracted]. The `.h5` is jaxpower's own format (`lsstypes`),
+  the same as the EMC measurements; the `.json` holds the run, HOD settings and parameters,
+  number of galaxies and density, H(z) and the estimator settings. The mock itself is not kept.
+  The k-bins are 0.001 h/Mpc wide (as in EMC): the first row is the k = 0 mode and bins without
+  modes (N_modes = 0) are NaN; skip both, and rebin (weighting by N_modes) for plots.
 
 ## 9. Notebooks
 

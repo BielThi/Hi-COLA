@@ -5,7 +5,7 @@ For every snapshot_<simulation_name>_z<z>/ of the run it copies, when present:
 
     pofk_z<z>.txt                    -> HiCOLA_<simulation_name>_z<z>_PS.txt
     halo_catalog/halos200c_hmf.txt   -> HiCOLA_<simulation_name>_z<z>_HMF.txt   (+ .json)
-    halo_catalog/hod/<name>.fits     -> HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits
+    halo_catalog/hod/<name>_PS.txt   -> HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt   (+ .h5, .json)
 
 Scratch is cleaned up automatically; these copies are the ones to keep. Called at the end of
 jobs/backend.sh, jobs/halo_finder.sh and jobs/hod_mock.sh, and safe to rerun.
@@ -19,6 +19,7 @@ import argparse
 import re
 import shutil
 import sys
+from pathlib import Path
 
 import hicola_paths as hp
 
@@ -59,12 +60,18 @@ def main() -> int:
                     shutil.copy2(source, target)
                     print(f"{source} -> {target}")
                     copied += 1
-        for mock in sorted((hp.halo_catalog_dir(*run, redshift) / "hod").glob("*.fits")):
-            destination = hp.hicola_hod_file(*run, redshift, mock.stem)
+        for spectrum in sorted((hp.halo_catalog_dir(*run, redshift) / "hod").glob("*_PS.txt")):
+            destination = hp.hicola_hod_spectrum_file(*run, redshift, spectrum.name[: -len("_PS.txt")])
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(mock, destination)
-            print(f"{mock} -> {destination}")
-            copied += 1
+            for source, target in [
+                (spectrum, destination),
+                (spectrum.with_suffix(".h5"), destination.with_suffix(".h5")),
+                (Path(str(spectrum) + ".json"), Path(str(destination) + ".json")),
+            ]:
+                if source.exists():
+                    shutil.copy2(source, target)
+                    print(f"{source} -> {target}")
+                    copied += 1
 
     print(f"Copied {copied} file(s) to {hp.hicola_dir(*run)}")
     return 0

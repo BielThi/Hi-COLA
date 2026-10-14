@@ -8,9 +8,9 @@
 #SBATCH --mem-per-cpu=6G
 #SBATCH --time=0:30:00
 #SBATCH --partition=academic
-# HODDIES galaxy mock on the halo array of one snapshot of a Hi-COLA run, written in the format
-# of the EMC AbacusHOD mocks (FITS, see scripts/run_hod_mock.py), then copied to
-# $HICOLA_DATA_ROOT/hicola/.
+# HODDIES galaxy mock on the halo array of one snapshot of a Hi-COLA run, and its redshift-space
+# power spectrum multipoles measured as in the EMC/acm pipeline (scripts/run_hod_mock.py,
+# scripts/galaxy_power_spectrum.py), then copied to $HICOLA_DATA_ROOT/hicola/.
 #
 # Edit the parameters below, then submit it (from any folder):
 #   sbatch ~/Hi-COLA/jobs/hod_mock.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_mock.sh)
@@ -29,10 +29,16 @@ TRACER="LRG"
 SEED="42"
 NTHREADS="32"   # HODDIES threads; the mock of a seed depends on it (at most --cpus-per-task)
 
-# Output: halo_catalog/hod/<NAME>.fits in the run folder
+# Power spectrum (EMC/acm settings so far: z, 512, 0 2 4, 0.001)
+LOS="z"          # line of sight (box axis) of the redshift-space shift
+MESHSIZE="512"
+ELLS="0 2 4"     # multipoles
+K_STEP="0.001"   # k-bin width [h/Mpc]
+
+# Output: halo_catalog/hod/<NAME>_PS.txt in the run folder
 NAME="${TRACER}_seed${SEED}"
 # -------------------------------------------------------------------------
-# Box size is taken from the run file.
+# Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.
 
 set -euo pipefail
 # The Hi-COLA folder this script belongs to. SLURM runs a copy of the script, so ask SLURM
@@ -58,17 +64,22 @@ if [ "$TARGET" = standalone ]; then
     exit 1
 fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
+COSMOLOGY=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
+           --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF")
 MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seed "$SEED" --name "$NAME" --nthreads "$NTHREADS")
+read -r -a ELL_LIST <<< "$ELLS"
+PK=(--los "$LOS" --meshsize "$MESHSIZE" --ells "${ELL_LIST[@]}" --k-step "$K_STEP")
 
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
 echo "HOD:            $TRACER from $HOD_PARAM_FILE, seed $SEED, $NTHREADS threads"
-echo "Output name:    $NAME"
+echo "P(k):           redshift space along $LOS, mesh ${MESHSIZE}^3, ells $ELLS, k-step $K_STEP (jaxpower, TSC, interlacing 3)"
+echo "Output name:    ${NAME}_PS.txt"
 echo "Resources:      ${SLURM_CPUS_PER_TASK:-?} CPUs"
 echo "================================================================"
 
 export NUMBA_NUM_THREADS="$NTHREADS"
-time python "$HICOLA_ROOT/scripts/run_hod_mock.py" "${RUN[@]}" "${MOCK[@]}"
+time python "$HICOLA_ROOT/scripts/run_hod_mock.py" "${RUN[@]}" "${COSMOLOGY[@]}" "${MOCK[@]}" "${PK[@]}"
 
 python "$HICOLA_ROOT/scripts/collect_products.py" "$TARGET" "$MODEL" "$REALIZATION"
