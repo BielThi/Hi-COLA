@@ -207,7 +207,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEED`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `NAME` | 1 task, 32 threads, 6 GB/thread, 30 min | `sbatch jobs/hod_mock.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `NAME` | 1 task, 32 threads, 6 GB/thread, 30 min | `sbatch jobs/hod_mock.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -267,6 +267,10 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   noise from jaxpower; `MESHSIZE`, `ELLS`, `K_STEP` from the job (EMC values: 512, 0 2 4, 0.001),
   so it compares directly with the EMC measurements. If acm changes its estimator, the copy
   does not follow. Runs on CPU (jax).
+  One job makes one mock and P(k) per seed of `SEEDS` (the halo array is loaded once, ~40 s per
+  seed at mesh 512); `NAME` contains `{seed}` (default `<TRACER>_seed{seed}`), so each seed has
+  its own file. A seed gives the same mock alone or in a list, but the mock also depends on
+  `NTHREADS`: keep it fixed across seeds and runs. Use the same seeds for the models compared.
 - **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): halo + field particles
   of the chosen subsamples (A = 3%, B = 7%), TSC, interlaced, window compensated, shot noise
   subtracted (these estimator choices are fixed in the script); Nmesh and k-bins from the job
@@ -308,7 +312,7 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   (peculiar velocities).
 - **HOD galaxy P(k)** `halo_catalog/hod/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
   `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt`: the
-  redshift-space power spectrum multipoles of a HODDIES mock, columns k [h/Mpc], N_modes,
+  redshift-space power spectrum multipoles of a HODDIES mock (one file per seed), columns k [h/Mpc], N_modes,
   P_0, P_2, P_4 [(Mpc/h)³, shot noise subtracted]. The `.h5` is jaxpower's own format (`lsstypes`),
   the same as the EMC measurements; the `.json` holds the run, HOD settings and parameters,
   number of galaxies and density, H(z) and the estimator settings. The mock itself is not kept.
@@ -336,6 +340,7 @@ imports:
   k, r_mean, r_std = an.reference_ratio('COLA_NM4096', 'nDGP_N1.2', 'LCDM', 1.65, 'PS', boxes=range(1, 11))
   k, P = an.load_hicola('COLA_NM4096', 'LCDM', an.PAIRED_FIXED, 1.65, 'PS')   # mean over realizations
   k, P = an.load_hod_spectrum('Abacus_Small', 'LCDM', 's1234', 0.5, 'LRG_seed42', dk=0.01)  # HOD P(k), {ell: P_ell}
+  k, P = an.load_hod_spectra('Abacus_Small', 'LCDM', 's1234', 0.5, 'LRG_seed{seed}', seeds=range(1, 11), dk=0.01)  # {ell: (n_seeds, n_k)}
   an.ratio(x_num, y_num, x_den, y_den), an.interp_to(...), an.within(...)
   ```
 
@@ -347,7 +352,7 @@ imports:
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
-| `marked.ipynb` | S_X(k) = X_nDGP/X_GR − 1 for X = P₀, P₂ of the HOD galaxy P(k) (`hod_mock.sh`) | target, redshift, realization, HOD name, models, ells, dk (rebinning), k_max |
+| `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), averaged over seeds (`hod_mock.sh`) | target, redshift, realization, HOD name (with `{seed}`), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` | table names |
 | `scan.ipynb` | scan of the nDGP frontend parameters | template `Frontend_parameter_files/nDGP_scan/nDGP_scan.ini` |

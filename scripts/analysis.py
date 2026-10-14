@@ -130,6 +130,19 @@ def load_hod_spectrum(target: str, model: str, realization: str, redshift: float
     return k_binned, poles
 
 
+def load_hod_spectra(target: str, model: str, realization: str, redshift: float, name: str, seeds, dk: float):
+    """HOD P(k) multipoles of several seeds: k and {ell: array (n_seeds, n_k)}.
+
+    name contains {seed} (as NAME in jobs/hod_mock.sh, e.g. 'LRG_seed{seed}'); every seed must exist.
+    """
+    tables = [load_hod_spectrum(target, model, realization, redshift, name.format(seed=seed), dk) for seed in seeds]
+    k = tables[0][0]
+    for seed, (k_seed, _) in zip(seeds, tables):
+        if not (len(k_seed) == len(k) and np.allclose(k_seed, k)):
+            raise ValueError(f"{target}/{model}/{realization} seed {seed}: k-bins differ from seed {seeds[0]}")
+    return k, {ell: np.vstack([poles[ell] for _, poles in tables]) for ell in tables[0][1]}
+
+
 # ---------------------------------------------------------------- combining
 
 

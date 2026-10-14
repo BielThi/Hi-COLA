@@ -26,8 +26,8 @@ REDSHIFT="0.500"
 # If the file sets the tracer's `density`, HODDIES rescales Ac to reach it.
 HOD_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500.yaml"
 TRACER="LRG"
-SEED="42"
-NTHREADS="32"   # HODDIES threads; the mock of a seed depends on it (at most --cpus-per-task)
+SEEDS="42"      # HOD seeds, one mock and P(k) each, e.g. "1 2 3 4 5"; ~40 s per seed at mesh 512 (raise --time above for more than ~40 seeds)
+NTHREADS="32"   # HODDIES threads; the mock of a seed depends on it: keep it fixed across seeds
 
 # Power spectrum (EMC/acm settings so far: z, 512, 0 2 4, 0.001)
 LOS="z"          # line of sight (box axis) of the redshift-space shift
@@ -35,8 +35,8 @@ MESHSIZE="512"
 ELLS="0 2 4"     # multipoles
 K_STEP="0.001"   # k-bin width [h/Mpc]
 
-# Output: halo_catalog/hod/<NAME>_PS.txt in the run folder
-NAME="${TRACER}_seed${SEED}"
+# Output: halo_catalog/hod/<NAME>_PS.txt in the run folder, {seed} replaced by each seed
+NAME="${TRACER}_seed{seed}"
 # -------------------------------------------------------------------------
 # Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.
 
@@ -66,16 +66,17 @@ fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
 COSMOLOGY=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF")
-MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seed "$SEED" --name "$NAME" --nthreads "$NTHREADS")
+read -r -a SEED_LIST <<< "$SEEDS"
+MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS")
 read -r -a ELL_LIST <<< "$ELLS"
 PK=(--los "$LOS" --meshsize "$MESHSIZE" --ells "${ELL_LIST[@]}" --k-step "$K_STEP")
 
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
-echo "HOD:            $TRACER from $HOD_PARAM_FILE, seed $SEED, $NTHREADS threads"
+echo "HOD:            $TRACER from $HOD_PARAM_FILE, seeds $SEEDS, $NTHREADS threads"
 echo "P(k):           redshift space along $LOS, mesh ${MESHSIZE}^3, ells $ELLS, k-step $K_STEP (jaxpower, TSC, interlacing 3)"
-echo "Output name:    ${NAME}_PS.txt"
+echo "Output names:   ${NAME}_PS.txt for each seed"
 echo "Resources:      ${SLURM_CPUS_PER_TASK:-?} CPUs"
 echo "================================================================"
 
