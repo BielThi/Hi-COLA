@@ -8,12 +8,9 @@ Output: halo_catalog/hod/<name>.fits, the format of the EMC AbacusHOD mocks
         IS_CENT; centrals first; header N_CENT, GAL_TYPE, the HOD parameters of the tracer
         and the settings of the mock.
 
-Velocities: the halo arrays carry Gadget velocities, v_pec / sqrt(a) (Hi-COLA writes its snapshots
-in that convention and nbodykit reads them unchanged), while the EMC format needs peculiar
-velocities in km/s. The halo velocities (vx, vy, vz) and dispersions (Vrms) are therefore
-multiplied by sqrt(a) before the mock is made, so the satellites get consistent velocities too.
-If the halo finder is changed to write peculiar velocities, remove this conversion
-(to_peculiar_velocities).
+Velocities: the halo arrays carry peculiar velocities in km/s (converted from the Gadget
+convention by the halo finder), as the EMC format needs. Halo catalogs made before that fix
+(2026-10-14) are refused: rerun jobs/halo_finder.sh on them.
 
 The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
 `density`, HODDIES rescales Ac (and the satellites with it) to reach that number density.
@@ -33,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 import hicola_paths as hp
-from halo_pipeline import load_catalog_metadata, save_galaxy_fits
+from halo_pipeline import load_catalog_metadata, require_peculiar_velocities, save_galaxy_fits
 
 
 def import_hoddies():
@@ -68,22 +65,14 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def to_peculiar_velocities(halos: np.ndarray, redshift: float) -> float:
-    """Convert the Gadget velocities of a halo array (v_pec / sqrt(a)) to peculiar km/s, in place."""
-    factor = np.sqrt(1.0 / (1.0 + redshift))
-    for field in ("vx", "vy", "vz", "Vrms"):
-        halos[field] = halos[field] * factor
-    return factor
-
-
 def main() -> int:
     args = parse_args()
     HOD = import_hoddies()
 
     halos = np.load(args.halo_array)
-    factor = to_peculiar_velocities(halos, args.redshift)
-    print(f"Velocities:     halo vx, vy, vz, Vrms multiplied by sqrt(a) = {factor:.4f} (Gadget -> peculiar km/s)")
-    metadata = load_catalog_metadata(hp.halo_catalog_file(args.target, args.model, args.realization, args.redshift))
+    catalog_file = hp.halo_catalog_file(args.target, args.model, args.realization, args.redshift)
+    metadata = load_catalog_metadata(catalog_file)
+    require_peculiar_velocities(metadata, catalog_file)
     if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
         raise SystemExit(f"--boxsize {args.boxsize} differs from the halo catalog's {metadata['boxsize']}")
     print(f"Halos:          {args.halo_array} ({len(halos):,} halos)")

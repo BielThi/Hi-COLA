@@ -15,7 +15,15 @@ from pathlib import Path
 import numpy as np
 
 import hicola_paths as hp
-from halo_pipeline import compute_hmf, halo_catalog_to_hoddies, save_hmf_table, validate_halo_catalog
+from halo_pipeline import (
+    VELOCITY_DEFINITION,
+    compute_hmf,
+    halo_catalog_to_hoddies,
+    load_catalog_metadata,
+    require_peculiar_velocities,
+    save_hmf_table,
+    validate_halo_catalog,
+)
 
 
 def default_hoddies_output(halo_catalog: Path) -> Path:
@@ -61,6 +69,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     catalog = np.load(args.halo_catalog)
+    require_peculiar_velocities(load_catalog_metadata(args.halo_catalog), args.halo_catalog)
     validate_halo_catalog(catalog, boxsize=args.boxsize)
 
     hoddies_output = args.hoddies_output or default_hoddies_output(args.halo_catalog)
@@ -76,6 +85,7 @@ def main() -> int:
                 "radius_units": "kpc/h",
                 "position_units": "Mpc/h",
                 "velocity_units": "km/s",
+                "velocity_definition": VELOCITY_DEFINITION,
                 "n_halos": int(len(hoddies)),
             },
             handle,

@@ -41,6 +41,22 @@ HODDIES_DTYPE = [
 ]
 
 
+# Halo velocities (vx, vy, vz, vrms) are peculiar velocities in km/s. Hi-COLA's Gadget snapshots
+# store v_pec / sqrt(a), so run_halo_catalog.py multiplies by sqrt(a) and records this in the
+# catalog metadata; catalogs made before that fix (2026-10-14) lack the key and are refused.
+VELOCITY_DEFINITION = "peculiar"
+
+
+def require_peculiar_velocities(metadata: Mapping[str, Any], catalog_path: str | Path) -> None:
+    """Stop if a halo catalog's velocities are not marked as peculiar (made before the fix)."""
+    if metadata.get("velocity_definition") != VELOCITY_DEFINITION:
+        raise SystemExit(
+            f"{catalog_path}: halo velocities are not marked as peculiar velocities; this catalog was "
+            "made before the velocity fix of 2026-10-14 (velocities too large by sqrt(1+z)). "
+            "Rerun jobs/halo_finder.sh on this run and redshift."
+        )
+
+
 def require_fields(catalog: np.ndarray, fields: tuple[str, ...] | list[str]) -> None:
     names = catalog.dtype.names or ()
     missing = [field for field in fields if field not in names]

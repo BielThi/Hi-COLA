@@ -287,12 +287,15 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   σ_n(>M), dn/dlog10M, σ, counts(>M), counts per bin. A `.json` next to a file holds its
   metadata (run, settings, cosmology, mass grid source).
 - **Halo catalog** `halos200c_catalog.npy`: structured array with `x y z` [Mpc/h], `vx vy vz`
-  and `vrms` [km/s, **Gadget convention v_pec/√a**, see section 14], `m200c`, `log10_m200c`
-  [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
-  (FoF particles), `halo_id`; `.json` with box size, redshift, FoF settings, particle mass and
-  cosmology.
+  and `vrms` [peculiar km/s], `m200c`, `log10_m200c` [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
+  (FoF particles), `halo_id`; `.json` with box size, redshift, FoF settings, particle mass,
+  cosmology and `velocity_definition: "peculiar"`. Hi-COLA's Gadget snapshots store v_pec/√a;
+  the halo finder multiplies by √a (checking a against the snapshot header). Catalogs without
+  `velocity_definition` were made before this fix (2026-10-14) and have velocities too large by
+  √(1+z): the halo outputs, the HOD-mock job and the HOD/LRG notebooks refuse them; rerun the
+  halo finder.
 - **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`
-  (velocities in the same Gadget convention).
+  (peculiar velocities).
 - **HOD mock** `halo_catalog/hod/<name>.fits` (`jobs/hod_mock.sh`, `scripts/run_hod_mock.py`),
   kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>.fits`: the format of the EMC AbacusHOD mocks
   (`/pscratch/sd/e/epaillas/emc/hods/z0.5/yuan23_prior/small/hod*/ph*_hod*.fits`). One binary
@@ -300,9 +303,8 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   `VX VY VZ` [peculiar km/s], `MASS` [Msun/h] and `ID` of the host halo, `IS_CENT` (1.0/0.0).
   Header: `N_CENT`, `GAL_TYPE`, the tracer's HODDIES parameters (not the AbacusHOD ones of the
   EMC files), `SIM_NAME`, `REDSHIFT`, `BOXSIZE`, `SEED`, `NTHREADS`, `HOD_FILE`, `VEL_DEF`
-  (`peculiar km/s`). The mock of a seed also depends on `NTHREADS`. `run_hod_mock.py` converts
-  the halo velocities and dispersions to peculiar ones (× √a) before making the mock; mocks made
-  before 2026-10-14 have no `VEL_DEF` and velocities too large by √(1+z).
+  (`peculiar km/s`). The mock of a seed also depends on `NTHREADS`. Mocks without `VEL_DEF` were
+  made before the velocity fix and have velocities too large by √(1+z).
 
 ## 9. Notebooks
 
@@ -420,6 +422,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 | job stops with "simulation_name is …, expected …" or "output_folder … should end with …" | the run file doesn't follow the naming (section 5); usually a copied file whose names weren't updated |
 | `Failed to create snapshot folder` | `nbody` run by hand without creating the nested `output_folder` first (`mkdir -p`); the job script does it |
 | halo-finder job `DependencyNeverSatisfied` | the backend job it waits for failed; read the backend log |
+| "halo velocities are not marked as peculiar velocities" | the halo catalog was made before the velocity fix (2026-10-14); rerun `jobs/halo_finder.sh` on that run and redshift |
 | `--mass-grid reference: there is no reference HMF` | `HMF_MASS_GRID="reference"` for a target/redshift without reference HMF; use `MIN MAX N` |
 | sbatch: `exceeds MaxMemPerCPU` | more than 7000 MB per core requested; lower `--mem-per-cpu`/`--mem` or add cores |
 | notebook: "Skipping … No PS for …" | the run (or that redshift) doesn't exist on scratch nor in `hicola_data/hicola/` |
@@ -436,14 +439,6 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 - The COLA_NM4096 reference HMF is spherical-overdensity with an unstated Δ; Hi-COLA HMFs are
   FoF + M200c.
 - Abacus_Small has no reference HMF yet.
-- **Halo velocities are in the Gadget convention, v_pec/√a**, not peculiar km/s: Hi-COLA writes
-  its snapshots that way and `scripts/run_halo_catalog.py` uses nbodykit's `GadgetVelocity`
-  unchanged (the catalog metadata says "km/s"). Positions, masses, HMFs and real-space
-  measurements are unaffected. `jobs/hod_mock.sh` converts to peculiar velocities; anything
-  else using the halo velocities in redshift space is too large by √(1+z) (1.22 at z = 0.5): the
-  RSD multipoles in `LRG_Abacus_Small.ipynb` and HODDIES clustering with RSD in the HOD
-  notebooks. Fixing it in the halo finder (`gadget["Velocity"] = gadget["GadgetVelocity"] * √a`)
-  would also require removing the conversion in `run_hod_mock.py`.
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History
@@ -465,6 +460,11 @@ Old names → current names, for older notes, plots and logs:
 | `Hi-COLA_Output/Frontend/` | `HiCOLA/Output/` |
 | `backend*.sh`, `halo_finder512*.sh`, `power_spectrum_abacus.sh` at the root | `jobs/` |
 | `power_spectrum*.ipynb` (8 versions) | `compare_COLA_NM4096.ipynb`, `compare_Abacus_Small.ipynb`, `LRG_Abacus_Small.ipynb` |
+
+Velocity fix (2026-10-14): halo catalogs made before it carry Gadget velocities (v_pec/√a)
+labelled as km/s, too large by √(1+z) (1.22 at z = 0.5). Real-space results (positions, masses,
+HMF, P(k)) are unaffected; anything in redshift space made from those catalogs (HOD mocks, RSD
+multipoles, HODDIES clustering with RSD) should be redone after rerunning the halo finder.
 
 Fixed during the reorganisation: the `_a`/`_ma` Bart runs (`LCDM_Bart_a/_ma`) wrote to the
 same output folder as `LCDM_Bart`, and the nDGP `_a/_ma` Bart runs used seed 4321 and

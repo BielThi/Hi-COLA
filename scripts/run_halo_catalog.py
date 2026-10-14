@@ -32,6 +32,7 @@ import numpy as np
 from mpi4py import MPI
 
 import hicola_paths as hp
+from halo_pipeline import VELOCITY_DEFINITION
 
 
 def parse_args() -> argparse.Namespace:
@@ -117,6 +118,14 @@ def read_particle_mass(snapshot_glob: str, particle_type: int) -> float:
         )
 
     return float(massarr[particle_type])
+
+
+def read_scale_factor(snapshot_glob: str) -> float:
+    """Scale factor a stored in the Gadget header (field `time`)."""
+    with open(sorted(glob.glob(snapshot_glob))[0], "rb") as handle:
+        handle.read(4)
+        header = handle.read(256)
+    return float(struct.unpack("<d", header[72:80])[0])
 
 
 def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray, boxsize: float) -> np.ndarray:
@@ -208,6 +217,10 @@ def main() -> int:
     log(comm, f"Snapshot: {args.snapshot}")
 
     particle_mass_code = read_particle_mass(args.snapshot, args.particle_type)
+    scale_factor = read_scale_factor(args.snapshot)
+    if not np.isclose(scale_factor, 1.0 / (1.0 + args.redshift), rtol=1e-3):
+        raise SystemExit(f"--redshift {args.redshift} does not match the snapshot (a = {scale_factor:.5f})")
+    log(comm, f"Velocities: Gadget velocities x sqrt(a) = {np.sqrt(scale_factor):.5f} -> peculiar km/s")
     particle_mass = particle_mass_code * 1.0e10
     log(comm, f"Particle mass from Gadget header: {particle_mass_code} x 1e10 Msun/h")
 
@@ -221,7 +234,8 @@ def main() -> int:
 
     log(comm, "Opening Gadget catalog")
     gadget = Gadget1Catalog(args.snapshot, comm=comm)
-    gadget["Velocity"] = gadget["GadgetVelocity"]
+    # Gadget snapshots store v_pec / sqrt(a) (nbodykit's GadgetVelocity); convert to peculiar km/s
+    gadget["Velocity"] = gadget["GadgetVelocity"] * np.sqrt(scale_factor)
     gadget.attrs["BoxSize"] = np.array([args.boxsize, args.boxsize, args.boxsize])
 
     log(comm, "Running FOF; note that FOF(...) calls run() internally")
@@ -273,6 +287,7 @@ def main() -> int:
             "radius_units": "kpc/h",
             "position_units": "Mpc/h",
             "velocity_units": "km/s",
+            "velocity_definition": VELOCITY_DEFINITION,
             "vrms_definition": "sqrt(sum_i(<v_i^2> - <v_i>^2)) over FOF member particles",
             "mpi_ranks": comm.size,
             "halos": int(len(arr)),
