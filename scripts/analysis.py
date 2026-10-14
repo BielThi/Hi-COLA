@@ -98,19 +98,22 @@ def load_hicola(target: str, model: str, realizations, redshift: float, kind: st
     return x, np.mean([y for _, y in tables], axis=0)
 
 
-def load_hod_spectrum(target: str, model: str, realization: str, redshift: float, name: str, dk: float):
+def load_hod_spectrum(target: str, model: str, realization: str, redshift: float, name: str, dk: float,
+                      statistic: str = "PS"):
     """Redshift-space multipoles of a HOD mock (jobs/hod_mock.sh), rebinned to bins of width dk.
+
+    statistic: 'PS' (power spectrum) or 'MPS' (marked power spectrum).
 
     Reads the run folder on scratch, or the kept copy in hicola_data. Returns k (mode-weighted
     mean of each bin) and {ell: P_ell}, averaged over the fine bins with weights N_modes; the
     k = 0 mode and empty bins are left out.
     """
-    run_file = hp.hod_spectrum_file(target, model, realization, redshift, name)
-    kept_file = hp.hicola_hod_spectrum_file(target, model, realization, redshift, name)
+    run_file = hp.hod_spectrum_file(target, model, realization, redshift, name, statistic)
+    kept_file = hp.hicola_hod_spectrum_file(target, model, realization, redshift, name, statistic)
     path = run_file if run_file.exists() else kept_file
     if not path.exists():
         raise FileNotFoundError(
-            f"No HOD P(k) '{name}' for {target}/{model}/{realization} at z={redshift:.3f}: neither "
+            f"No HOD {statistic} '{name}' for {target}/{model}/{realization} at z={redshift:.3f}: neither "
             f"{run_file} nor {kept_file} exists. Run jobs/hod_mock.sh on {hp.run_file(target, model, realization)}."
         )
     with open(path) as handle:
@@ -130,12 +133,14 @@ def load_hod_spectrum(target: str, model: str, realization: str, redshift: float
     return k_binned, poles
 
 
-def load_hod_spectra(target: str, model: str, realization: str, redshift: float, name: str, seeds, dk: float):
-    """HOD P(k) multipoles of several seeds: k and {ell: array (n_seeds, n_k)}.
+def load_hod_spectra(target: str, model: str, realization: str, redshift: float, name: str, seeds, dk: float,
+                     statistic: str = "PS"):
+    """HOD P(k) ('PS') or marked P(k) ('MPS') multipoles of several seeds: k and {ell: array (n_seeds, n_k)}.
 
     name contains {seed} (as NAME in jobs/hod_mock.sh, e.g. 'LRG_seed{seed}'); every seed must exist.
     """
-    tables = [load_hod_spectrum(target, model, realization, redshift, name.format(seed=seed), dk) for seed in seeds]
+    tables = [load_hod_spectrum(target, model, realization, redshift, name.format(seed=seed), dk, statistic)
+              for seed in seeds]
     k = tables[0][0]
     for seed, (k_seed, _) in zip(seeds, tables):
         if not (len(k_seed) == len(k) and np.allclose(k_seed, k)):

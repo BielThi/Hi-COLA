@@ -98,9 +98,20 @@ def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hmf.txt"
 
 
-def hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str) -> Path:
-    """Redshift-space P(k) multipoles of a HOD mock (scripts/run_hod_mock.py)."""
-    return halo_catalog_dir(target, model, realization, redshift) / "hod" / f"{name}_PS.txt"
+HOD_STATISTICS = ("PS", "MPS")  # power spectrum, marked power spectrum
+
+
+def _check_hod_statistic(statistic: str) -> None:
+    if statistic not in HOD_STATISTICS:
+        raise ValueError(f"HOD statistic must be one of {HOD_STATISTICS}, got {statistic!r}")
+
+
+def hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str,
+                      statistic: str = "PS") -> Path:
+    """Redshift-space P(k) (statistic 'PS') or marked P(k) ('MPS') multipoles of a HOD mock
+    (scripts/run_hod_mock.py)."""
+    _check_hod_statistic(statistic)
+    return halo_catalog_dir(target, model, realization, redshift) / "hod" / f"{name}_{statistic}.txt"
 
 
 def log_dir(target: str, model: str, realization: str) -> Path:
@@ -125,9 +136,11 @@ def hicola_file(target: str, model: str, realization: str, redshift: float, kind
     return hicola_dir(target, model, realization) / name
 
 
-def hicola_hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str) -> Path:
-    """Kept copy of the P(k) multipoles of a HOD mock."""
-    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_{name}_PS.txt"
+def hicola_hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str,
+                             statistic: str = "PS") -> Path:
+    """Kept copy of the P(k) ('PS') or marked P(k) ('MPS') multipoles of a HOD mock."""
+    _check_hod_statistic(statistic)
+    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_{name}_{statistic}.txt"
     return hicola_dir(target, model, realization) / file_name
 
 

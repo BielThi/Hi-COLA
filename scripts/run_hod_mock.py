@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Make HODDIES galaxy mocks from the halo array of a run and measure their redshift-space P(k).
+"""Make HODDIES galaxy mocks from the halo array of a run and measure their redshift-space P(k)
+and marked P(k).
 
 Input:  halo_catalog/halos200c_hoddies.npy of the run (written by jobs/halo_finder.sh), with
         peculiar velocities (catalogs made before the velocity fix of 2026-10-14 are refused).
@@ -8,6 +9,10 @@ Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one
         multipoles of the mock in redshift space, measured as in the EMC/acm pipeline
         (galaxy_power_spectrum.py): columns k [h/Mpc], N_modes, P_ell [(Mpc/h)^3] shot-noise
         subtracted; the .h5 is jaxpower's own format, the same as the EMC measurements.
+        halo_catalog/hod/<name>_MPS.txt (+ .h5, .txt.json): the marked power spectrum of the same
+        mock, same columns and estimator settings (galaxy_power_spectrum.compute_marked_spectrum,
+        as acm), mark m = sum_n c_n delta_R^n with --mark-rcut R and --mark-coefficients c_0 c_1 ...;
+        the .h5 has the mark's m_bar, m_min, m_max as attributes, as in acm.
 
 The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
 `density`, HODDIES rescales Ac (and the satellites with it) to reach that number density.
@@ -20,7 +25,7 @@ Redshift-space positions: x_los + v_los / (a H(z)), with H(z) from the run's cos
         --redshift 0.5 --boxsize 500 --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 \\
         --tcmb 2.726 --neff 3.046 --hod-param-file Notebooks/HOD_parameter_file_z0.500.yaml \\
         --tracer LRG --seeds 42 43 44 --nthreads 32 --name "LRG_seed{seed}" \\
-        --los z --meshsize 512 --ells 0 2 4 --k-step 0.001
+        --los z --meshsize 512 --ells 0 2 4 --k-step 0.001 --mark-rcut 10 --mark-coefficients 1 -0.5
 """
 from __future__ import annotations
 
@@ -33,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 import hicola_paths as hp
-from galaxy_power_spectrum import compute_spectrum, redshift_space_positions, save_spectrum
+from galaxy_power_spectrum import compute_marked_spectrum, compute_spectrum, redshift_space_positions, save_spectrum
 from halo_pipeline import load_catalog_metadata, require_peculiar_velocities
 
 
@@ -73,6 +78,11 @@ def parse_args() -> argparse.Namespace:
     pk.add_argument("--meshsize", type=int, required=True)
     pk.add_argument("--ells", type=int, nargs="+", required=True, help="multipoles, e.g. 0 2 4")
     pk.add_argument("--k-step", type=float, required=True, help="k-bin width [h/Mpc]")
+    mark = parser.add_argument_group("marked power spectrum (same settings as the P(k))")
+    mark.add_argument("--mark-rcut", type=float, required=True,
+                      help="Gaussian smoothing radius R of the density contrast in the mark [Mpc/h]")
+    mark.add_argument("--mark-coefficients", type=float, nargs="+", required=True,
+                      help="c_0 c_1 ... of the mark m = sum_n c_n delta_R^n")
     parser.add_argument("--halo-array", type=Path, default=None, help="Default: halos200c_hoddies.npy of the run")
     args = parser.parse_args()
 
@@ -118,9 +128,12 @@ def main() -> int:
 
 
 def measure_seed(HOD, halos: np.ndarray, seed: int, e_z: float, catalog_file: Path, args: argparse.Namespace) -> None:
-    """One HOD mock with this seed, its redshift-space P(k) multipoles, written to hod/<name>_PS.txt."""
+    """One HOD mock with this seed, its redshift-space P(k) and marked P(k) multipoles, written to
+    hod/<name>_PS.txt and hod/<name>_MPS.txt."""
     name = args.name.format(seed=seed)
-    output = hp.hod_spectrum_file(args.target, args.model, args.realization, args.redshift, name)
+    run = (args.target, args.model, args.realization, args.redshift, name)
+    output = hp.hod_spectrum_file(*run, "PS")
+    marked_output = hp.hod_spectrum_file(*run, "MPS")
     hod = HOD(
         hcat_file=halos.copy(),
         param_file=str(args.hod_param_file),
@@ -146,38 +159,58 @@ def measure_seed(HOD, halos: np.ndarray, seed: int, e_z: float, catalog_file: Pa
     )
     print(f"Redshift space: along {args.los}, H(z)/H0 = {e_z:.6f}")
 
+    metadata = {
+        "run": hp.simulation_name(args.target, args.model, args.realization),
+        "redshift": args.redshift,
+        "boxsize": args.boxsize,
+        "halo_catalog": str(catalog_file),
+        "hod_param_file": str(args.hod_param_file),
+        "tracer": args.tracer,
+        "hod_parameters": hod_parameters,
+        "seed": seed,
+        "nthreads": args.nthreads,
+        "n_galaxies": n_gal,
+        "n_centrals": n_cent,
+        "number_density_h3_Mpc3": density,
+        "redshift_space": {"los": args.los, "efunc": e_z, "shift": "v_los / (a H(z))"},
+    }
+    estimator = {
+        "code": "jaxpower, as acm scripts/emc/measurements/abacus_small.py compute_spectrum",
+        "meshsize": args.meshsize, "resampler": "tsc", "interlacing": 3, "compensate": True,
+        "ells": args.ells, "k_step": args.k_step, "shot_noise": "subtracted",
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+
     start = time.time()
     spectrum = compute_spectrum(positions, args.boxsize, args.meshsize, args.ells, args.los, args.k_step)
     print(f"Power spectrum: done in {time.time() - start:.1f} s (mesh {args.meshsize}^3, ells {args.ells}, k-step {args.k_step})")
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    save_spectrum(
-        spectrum,
-        args.ells,
-        output,
-        {
-            "run": hp.simulation_name(args.target, args.model, args.realization),
-            "redshift": args.redshift,
-            "boxsize": args.boxsize,
-            "halo_catalog": str(catalog_file),
-            "hod_param_file": str(args.hod_param_file),
-            "tracer": args.tracer,
-            "hod_parameters": hod_parameters,
-            "seed": seed,
-            "nthreads": args.nthreads,
-            "n_galaxies": n_gal,
-            "n_centrals": n_cent,
-            "number_density_h3_Mpc3": density,
-            "redshift_space": {"los": args.los, "efunc": e_z, "shift": "v_los / (a H(z))"},
-            "estimator": {
-                "code": "jaxpower, as acm scripts/emc/measurements/abacus_small.py compute_spectrum",
-                "meshsize": args.meshsize, "resampler": "tsc", "interlacing": 3, "compensate": True,
-                "ells": args.ells, "k_step": args.k_step, "shot_noise": "subtracted",
-            },
-        },
-    )
+    save_spectrum(spectrum, args.ells, output, {**metadata, "statistic": "power spectrum", "estimator": estimator})
     print(f"Saved:          {output} (+ .h5, .json)")
 
+    start = time.time()
+    marked_spectrum, mark_summary = compute_marked_spectrum(
+        positions, args.boxsize, args.meshsize, args.ells, args.los, args.k_step,
+        smoothing_radius=args.mark_rcut, mark_coefficients=args.mark_coefficients,
+    )
+    print(f"Marked P(k):    done in {time.time() - start:.1f} s (R = {args.mark_rcut} Mpc/h, "
+          f"coefficients {args.mark_coefficients}, m_bar {mark_summary['m_bar']:.4f}, "
+          f"m in [{mark_summary['m_min']:.4f}, {mark_summary['m_max']:.4f}])")
+    mark = {
+        "definition": "m = sum_n c_n delta_R^n, delta_R: galaxy density contrast smoothed with a Gaussian of radius R; "
+                      "normalised by m_bar = <m n_g> / <n_g>",
+        "rcut": args.mark_rcut, "coefficients": args.mark_coefficients, **mark_summary,
+    }
+    marked_estimator = {
+        **estimator,
+        "code": "jaxpower, as acm compute_marked_spectrum_acm (MarkedPowerSpectrumMultipoles, box without randoms)",
+        "normalization": "box (unmarked galaxies)",
+    }
+    save_spectrum(
+        marked_spectrum, args.ells, marked_output,
+        {**metadata, "statistic": "marked power spectrum", "mark": mark, "estimator": marked_estimator},
+        h5_attrs=mark_summary,
+    )
+    print(f"Saved:          {marked_output} (+ .h5, .json)")
 
 if __name__ == "__main__":
     raise SystemExit(main())
