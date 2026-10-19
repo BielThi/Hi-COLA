@@ -116,12 +116,23 @@ and Lua from the active env (`$(CONDA_PREFIX)`) and FML from the clone it is in,
 clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL, Lua) are
 the `USE_*` lines at the top of the Makefile.
 
-**HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository. The HOD
-notebooks import it from there (`$HODDIES_ROOT`), not from the `HODDIES` package installed in
-the env, which is a different copy. The fork's `main` (commit `2572a69`) has two workarounds
-on top of the original code: numba parallelism turned off (crashes on jed; same results,
-slower), and no custom cosmology built from the `cosmo` parameters (that line raised a
-`NameError`), so the notebooks set `HOD_obj.cosmo` themselves.
+**HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository, on the
+branch `hicola-dev-v2`. The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
+from the `HODDIES` package installed in the env, which is a different copy. `hicola-dev-v2` is
+the upstream branch `dev-v2` (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus two
+fixes: the merge conflict left in the imports of `hod.py` resolved, and `torch` imported only
+by the emulator functions that use it (the env has no torch). Since dev-v2 a HOD object is
+built from a halo catalogue:
+```python
+from HODDIES.sim_loader import Base_catalogue
+base_catalog = Base_catalogue({name: arr[name] for name in arr.dtype.names}, boxsize=boxsize, z_simu=redshift)
+HOD_obj = HOD(base_catalog, param_file=PARAM_FILE)   # the HOD job also passes nthreads and seed
+HOD_obj.cosmo = cosmology                           # for the RSD of get_wp / get_xiells
+```
+(the halo array is passed as a dict: a structured array is refused). The mock of a seed depends
+on the HODDIES version: mocks made with the fork's old `main` (commit `2572a69`, numba
+parallelism off) differ from dev-v2 ones and must not be mixed; the HOD job records the HODDIES
+branch and commit in each output's `.json`.
 
 **hi_class**: the env on jed has a `classy` built from `~/hi_class_public`
 (`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline uses it any more
@@ -400,7 +411,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
 ## 11. Setting up on another machine
 
-1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` into the same folder, copy `hicola_data/`
+1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` (branch `hicola-dev-v2`) into the same folder, copy `hicola_data/`
    next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` conda env (section 4), build `nbody` with it activated, run
    `nbstripout --install` in the clone.

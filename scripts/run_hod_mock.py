@@ -14,11 +14,14 @@ Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one
         as acm), mark m = sum_n c_n delta_R^n with --mark-rcut R and --mark-coefficients c_0 c_1 ...;
         the .h5 has the mark's m_bar, m_min, m_max as attributes, as in acm.
 
+HODDIES: the clone next to this repository (branch hicola-dev-v2 of the fork, based on the
+upstream dev-v2), whose commit is printed and saved in the metadata.
 The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
-`density`, HODDIES rescales Ac (and the satellites with it) to reach that number density.
+`density`, HODDIES rescales Ac (and the satellites with it) to reach that number density; if
+that needs Ac > 1, it keeps Ac and warns (the density is then not reached).
 The mock depends on the seed and on the number of threads (HODDIES seeds each block of halos).
-Each seed gets its own HOD object (the halo array is loaded once), so a seed gives the same mock
-whether it runs alone or in a list.
+Each seed gets its own halo catalogue and HOD object (the halo array is loaded once), so a seed
+gives the same mock whether it runs alone or in a list.
 Redshift-space positions: x_los + v_los / (a H(z)), with H(z) from the run's cosmology.
 
     python scripts/run_hod_mock.py --target Abacus_Small --model LCDM --realization s1234 \\
@@ -31,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -42,14 +46,20 @@ from galaxy_power_spectrum import compute_marked_spectrum, compute_spectrum, red
 from halo_pipeline import load_catalog_metadata, require_peculiar_velocities
 
 
-def import_hoddies():
-    """HOD class of the HODDIES clone next to this repository (not the copy installed in the env)."""
+def import_hoddies() -> dict:
+    """HOD and Base_catalogue of the HODDIES clone next to this repository (not the copy installed
+    in the env), with its git commit."""
     sys.path.insert(0, str(hp.HODDIES_ROOT))
     import HODDIES
     from HODDIES import HOD
+    from HODDIES.sim_loader import Base_catalogue
 
-    print(f"HODDIES:        {HODDIES.__file__}")
-    return HOD
+    git = ["git", "-C", str(hp.HODDIES_ROOT)]
+    commit = subprocess.run(git + ["describe", "--always", "--dirty"], capture_output=True, text=True).stdout.strip()
+    branch = subprocess.run(git + ["rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
+    version = f"{branch} {commit}".strip() or "unknown"
+    print(f"HODDIES:        {HODDIES.__file__} ({version})")
+    return {"HOD": HOD, "Base_catalogue": Base_catalogue, "version": version}
 
 
 def parse_args() -> argparse.Namespace:
@@ -109,7 +119,7 @@ def efunc(args: argparse.Namespace) -> float:
 
 def main() -> int:
     args = parse_args()
-    HOD = import_hoddies()
+    hoddies = import_hoddies()
 
     halos = np.load(args.halo_array)
     catalog_file = hp.halo_catalog_file(args.target, args.model, args.realization, args.redshift)
@@ -123,24 +133,25 @@ def main() -> int:
     print(f"Seeds:          {args.seeds} ({len(args.seeds)} mocks)")
     for seed in args.seeds:
         print(f"---------------- seed {seed}", flush=True)
-        measure_seed(HOD, halos, seed, e_z, catalog_file, args)
+        measure_seed(hoddies, halos, seed, e_z, catalog_file, args)
     return 0
 
 
-def measure_seed(HOD, halos: np.ndarray, seed: int, e_z: float, catalog_file: Path, args: argparse.Namespace) -> None:
+def measure_seed(hoddies: dict, halos: np.ndarray, seed: int, e_z: float, catalog_file: Path, args: argparse.Namespace) -> None:
     """One HOD mock with this seed, its redshift-space P(k) and marked P(k) multipoles, written to
     hod/<name>_PS.txt and hod/<name>_MPS.txt."""
     name = args.name.format(seed=seed)
     run = (args.target, args.model, args.realization, args.redshift, name)
     output = hp.hod_spectrum_file(*run, "PS")
     marked_output = hp.hod_spectrum_file(*run, "MPS")
-    hod = HOD(
-        hcat_file=halos.copy(),
-        param_file=str(args.hod_param_file),
-        hcat={"boxsize": args.boxsize, "z_simu": args.redshift},
-        nthreads=args.nthreads,
-        seed=seed,
+    base_catalog = hoddies["Base_catalogue"](
+        {column: halos[column].copy() for column in halos.dtype.names},  # a dict: a structured array is refused
+        boxsize=args.boxsize, z_simu=args.redshift, nthreads=args.nthreads,
     )
+    hod = hoddies["HOD"](base_catalog, param_file=str(args.hod_param_file), nthreads=args.nthreads, seed=seed)
+    if hod.nthreads != args.nthreads:
+        raise SystemExit(f"HODDIES uses {hod.nthreads} threads instead of --nthreads {args.nthreads} (it is capped by "
+                         f"numba's thread count, NUMBA_NUM_THREADS); the mock depends on it")
     if args.tracer not in hod.args["tracers"]:
         raise SystemExit(f"Tracer {args.tracer} is not in {args.hod_param_file} (tracers: {hod.args['tracers']})")
     hod_parameters = hod.args[args.tracer]
@@ -169,6 +180,7 @@ def measure_seed(HOD, halos: np.ndarray, seed: int, e_z: float, catalog_file: Pa
         "hod_parameters": hod_parameters,
         "seed": seed,
         "nthreads": args.nthreads,
+        "hoddies": hoddies["version"],
         "n_galaxies": n_gal,
         "n_centrals": n_cent,
         "number_density_h3_Mpc3": density,

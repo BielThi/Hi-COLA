@@ -32,4 +32,4 @@ setup on a new machine, troubleshooting, history). The data is described in
   (evaluate the old and new files with `lua` and diff the globals).
 - On jed (EPFL SCITAS): partition `academic`, 72 cores per node, max 7000 MB per core.
 - Commit with clear messages; push to GitHub only when asked.
-- Related repository: `../HODDIES` (fork `BielThi/HODDIES`), used by the HOD notebooks.
+- Related repository: `../HODDIES` (fork `BielThi/HODDIES`, branch `hicola-dev-v2`), used by the HOD job and notebooks.
