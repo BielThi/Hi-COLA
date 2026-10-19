@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hod_mock
-#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=32
@@ -40,7 +40,7 @@ K_STEP="0.001"   # k-bin width [h/Mpc]
 MARK_RCUT=""            # R [Mpc/h], e.g. "10"
 MARK_COEFFICIENTS=""    # c_0 c_1 c_2 ..., e.g. "1 -0.5"
 
-# Output: halo_catalog/hod/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed
+# Output: halo_catalog/hod_dev-v2/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed
 NAME="${TRACER}_seed{seed}"
 # -------------------------------------------------------------------------
 # Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.

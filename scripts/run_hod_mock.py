@@ -4,12 +4,12 @@ and marked P(k).
 
 Input:  halo_catalog/halos200c_hoddies.npy of the run (written by jobs/halo_finder.sh), with
         peculiar velocities (catalogs made before the velocity fix of 2026-10-14 are refused).
-Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one per seed
+Output: halo_catalog/hod_dev-v2/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one per seed
         (--name contains {seed}, e.g. LRG_seed{seed} -> LRG_seed42_PS.txt): the power spectrum
         multipoles of the mock in redshift space, measured as in the EMC/acm pipeline
         (galaxy_power_spectrum.py): columns k [h/Mpc], N_modes, P_ell [(Mpc/h)^3] shot-noise
         subtracted; the .h5 is jaxpower's own format, the same as the EMC measurements.
-        halo_catalog/hod/<name>_MPS.txt (+ .h5, .txt.json): the marked power spectrum of the same
+        halo_catalog/hod_dev-v2/<name>_MPS.txt (+ .h5, .txt.json): the marked power spectrum of the same
         mock, same columns and estimator settings (galaxy_power_spectrum.compute_marked_spectrum,
         as acm), mark m = sum_n c_n delta_R^n with --mark-rcut R and --mark-coefficients c_0 c_1 ...;
         the .h5 has the mark's m_bar, m_min, m_max as attributes, as in acm.
@@ -139,7 +139,7 @@ def main() -> int:
 
 def measure_seed(hoddies: dict, halos: np.ndarray, seed: int, e_z: float, catalog_file: Path, args: argparse.Namespace) -> None:
     """One HOD mock with this seed, its redshift-space P(k) and marked P(k) multipoles, written to
-    hod/<name>_PS.txt and hod/<name>_MPS.txt."""
+    hod_dev-v2/<name>_PS.txt and hod_dev-v2/<name>_MPS.txt."""
     name = args.name.format(seed=seed)
     run = (args.target, args.model, args.realization, args.redshift, name)
     output = hp.hod_spectrum_file(*run, "PS")

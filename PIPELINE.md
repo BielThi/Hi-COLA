@@ -14,6 +14,22 @@ Hi-COLA itself (`HiCOLA/`) keeps its original layout and file names. What was ad
 `HiCOLA/Parameter_files/Backend_parameter_files/`. The data lives outside the repository, in
 `hicola_data/` (reference data, kept results) and on scratch (simulation outputs).
 
+**This branch, `hicola-dev-v2`**, is the pipeline adapted to HODDIES dev-v2 (fork branch
+`hicola-dev-v2`). It lives next to the `main` pipeline (old HODDIES), which stays as it was:
+
+```
+~/Hi-COLA        main             ~/dev-v2/Hi-COLA     hicola-dev-v2   (git worktrees of the
+~/HODDIES        main             ~/dev-v2/HODDIES     hicola-dev-v2    same two repositories)
+~/hicola_data                     ~/dev-v2/hicola_data -> ~/hicola_data
+```
+
+Both share the run files, the simulations on scratch, the halo catalogs and `hicola_data`. Only
+the HOD outputs are kept apart, because the mocks differ between HODDIES versions:
+`halo_catalog/hod_dev-v2/` and `..._HOD-dev-v2_<name>_...` here, `halo_catalog/hod/` and
+`..._HOD_<name>_...` on `main` (`HOD_LABEL` in `scripts/hicola_paths.py`). Each clone has its own
+`nbody` build, frontend tables (`HiCOLA/Output/`) and job logs. Submit the jobs of this pipeline
+from `~/dev-v2/Hi-COLA/jobs/`.
+
 Contents: 1 quick start · 2 design rules · 3 where things live · 4 software setup · 5 runs and
 their names · 6 running jobs · 7 halo finder and measurements · 8 data and file formats ·
 9 notebooks · 10 adding runs or reference simulations · 11 another machine · 12 the jed cluster ·
@@ -76,7 +92,8 @@ These were chosen on purpose; keep them when changing the pipeline.
 │   ├── scripts/                    Python: paths, analysis helpers, halo finder, measurements
 │   └── Notebooks/                  analysis notebooks and HOD parameter files (section 9)
 ├── HODDIES/                        HOD code (fork BielThi/HODDIES)                 $HODDIES_ROOT
-└── hicola_data/                    reference data + kept measurements, README.md   $HICOLA_DATA_ROOT
+├── hicola_data/                    reference data + kept measurements, README.md   $HICOLA_DATA_ROOT
+└── dev-v2/                         this branch: Hi-COLA/, HODDIES/ (worktrees), hicola_data -> ../hicola_data
 /scratch/biel/Hi-COLA_Output/       simulation outputs: <target>/<model>/<realization>/   run root
 ```
 
@@ -116,8 +133,9 @@ and Lua from the active env (`$(CONDA_PREFIX)`) and FML from the clone it is in,
 clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL, Lua) are
 the `USE_*` lines at the top of the Makefile.
 
-**HODDIES**: the fork `github.com/BielThi/HODDIES`, cloned next to this repository, on the
-branch `hicola-dev-v2`. The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
+**HODDIES**: the fork `github.com/BielThi/HODDIES`, branch `hicola-dev-v2`, checked out next to
+this repository (`~/dev-v2/HODDIES`, a worktree of `~/HODDIES`, whose `main` serves the `main`
+pipeline). The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
 from the `HODDIES` package installed in the env, which is a different copy. `hicola-dev-v2` is
 the upstream branch `dev-v2` (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus two
 fixes: the merge conflict left in the imports of `hod.py` resolved, and `torch` imported only
@@ -242,7 +260,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
 - **Logs**: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`, at the full path written
-  in the `#SBATCH -o/-e` lines (`/home/biel/Hi-COLA/HiCOLA/Output/logs/`). Each log starts
+  in the `#SBATCH -o/-e` lines (`/home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/` on this branch). Each log starts
   with what was run: job, code commit (and whether there were uncommitted changes), conda
   env, run and data roots; for the backend and halo finder the run file with its box,
   particles, steps, z_init, gravity, cosmology, initial P(k), seed, fixed/inverted, output
@@ -327,16 +345,16 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   halo finder.
 - **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`
   (peculiar velocities).
-- **HOD galaxy P(k)** `halo_catalog/hod/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
-  `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt`: the
+- **HOD galaxy P(k)** `halo_catalog/hod_dev-v2/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
+  `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_<name>_PS.txt`: the
   redshift-space power spectrum multipoles of a HODDIES mock (one file per seed), columns k [h/Mpc], N_modes,
   P_0, P_2, P_4 [(Mpc/h)³, shot noise subtracted]. The `.h5` is jaxpower's own format (`lsstypes`),
   the same as the EMC measurements; the `.json` holds the run, HOD settings and parameters,
   number of galaxies and density, H(z) and the estimator settings. The mock itself is not kept.
   The k-bins are 0.001 h/Mpc wide (as in EMC): the first row is the k = 0 mode and bins without
   modes (N_modes = 0) are NaN; skip both, and rebin (weighting by N_modes) for plots.
-- **HOD marked P(k)** `halo_catalog/hod/<name>_MPS.txt` (+ `.h5`, `.txt.json`), kept as
-  `HiCOLA_<simulation_name>_z<z>_HOD_<name>_MPS.txt`: the marked power spectrum of the same mock,
+- **HOD marked P(k)** `halo_catalog/hod_dev-v2/<name>_MPS.txt` (+ `.h5`, `.txt.json`), kept as
+  `HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_<name>_MPS.txt`: the marked power spectrum of the same mock,
   same columns and bins. The `.json` also holds the mark (R, coefficients, m̄, min and max of m on
   the mesh), and the `.h5` has m_bar, m_min, m_max as attributes, as acm writes them. The file
   name does not contain the mark: a rerun with another mark overwrites it (check the `.json`).
@@ -411,7 +429,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
 ## 11. Setting up on another machine
 
-1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES` (branch `hicola-dev-v2`) into the same folder, copy `hicola_data/`
+1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES`, both on branch `hicola-dev-v2`, into the same folder, copy `hicola_data/`
    next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` conda env (section 4), build `nbody` with it activated, run
    `nbstripout --install` in the clone.
@@ -423,7 +441,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
    ```bash
    sed -i 's#/scratch/biel/Hi-COLA_Output#<new scratch path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua
-   sed -i 's#/home/biel/Hi-COLA/#<new Hi-COLA path>/#' jobs/*.sh
+   sed -i 's#/home/biel/dev-v2/Hi-COLA/#<new Hi-COLA path>/#' jobs/*.sh
    ```
    Export the scratch path as `HICOLA_RUN_ROOT` for the notebooks if it isn't
    `/scratch/$USER/Hi-COLA_Output`. A second clone on jed needs the log-folder `sed`.

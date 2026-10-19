@@ -99,6 +99,9 @@ def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path
 
 
 HOD_STATISTICS = ("PS", "MPS")  # power spectrum, marked power spectrum
+# HOD outputs of this branch (HODDIES dev-v2) are kept apart from those of the main branch (old
+# HODDIES), which use halo_catalog/hod/ and ..._HOD_<name>_... : the mocks differ between versions.
+HOD_LABEL = "dev-v2"
 
 
 def _check_hod_statistic(statistic: str) -> None:
@@ -106,12 +109,17 @@ def _check_hod_statistic(statistic: str) -> None:
         raise ValueError(f"HOD statistic must be one of {HOD_STATISTICS}, got {statistic!r}")
 
 
+def hod_dir(target: str, model: str, realization: str, redshift: float) -> Path:
+    """Folder of the HOD outputs of a run and redshift (scripts/run_hod_mock.py)."""
+    return halo_catalog_dir(target, model, realization, redshift) / f"hod_{HOD_LABEL}"
+
+
 def hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str,
                       statistic: str = "PS") -> Path:
     """Redshift-space P(k) (statistic 'PS') or marked P(k) ('MPS') multipoles of a HOD mock
     (scripts/run_hod_mock.py)."""
     _check_hod_statistic(statistic)
-    return halo_catalog_dir(target, model, realization, redshift) / "hod" / f"{name}_{statistic}.txt"
+    return hod_dir(target, model, realization, redshift) / f"{name}_{statistic}.txt"
 
 
 def log_dir(target: str, model: str, realization: str) -> Path:
@@ -140,7 +148,7 @@ def hicola_hod_spectrum_file(target: str, model: str, realization: str, redshift
                              statistic: str = "PS") -> Path:
     """Kept copy of the P(k) ('PS') or marked P(k) ('MPS') multipoles of a HOD mock."""
     _check_hod_statistic(statistic)
-    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_{name}_{statistic}.txt"
+    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD-{HOD_LABEL}_{name}_{statistic}.txt"
     return hicola_dir(target, model, realization) / file_name
 
 
