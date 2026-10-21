@@ -152,6 +152,13 @@ def hicola_hod_spectrum_file(target: str, model: str, realization: str, redshift
     return hicola_dir(target, model, realization) / file_name
 
 
+def hod_fit_dir(target: str, model: str, realization: str, redshift: float, fit_name: str) -> Path:
+    """Folder of the results of one HOD fit on a run and redshift (Notebooks/HOD_fit.ipynb), kept
+    directly in hicola_data next to the run's measurements: dir_output_fit of HODDIES."""
+    folder = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD-{HOD_LABEL}_fit_{fit_name}"
+    return hicola_dir(target, model, realization) / folder
+
+
 # ---------------------------------------------------------------- reference simulations
 
 

@@ -358,6 +358,12 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   same columns and bins. The `.json` also holds the mark (R, coefficients, m̄, min and max of m on
   the mesh), and the `.h5` has m_bar, m_min, m_max as attributes, as acm writes them. The file
   name does not contain the mark: a rerun with another mark overwrites it (check the `.json`).
+- **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<fit_name>/`
+  (`Notebooks/HOD_fit.ipynb`, `hp.hod_fit_dir`): HODDIES' `dir_output_fit`, set by the notebook
+  from the run and its `fit_name` (the parameter file has `dir_output_fit: null`). Written there
+  directly, not on scratch. Holds HODDIES' results, a copy of the parameter file and
+  `fit_info.json` (run, z, halo catalog, tracer, seed, nthreads, HODDIES commit). A new
+  `fit_name` for each fit; the same name writes into the same folder.
 
 ## 9. Notebooks
 
