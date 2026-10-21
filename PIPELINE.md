@@ -413,10 +413,16 @@ In the comparison notebooks, a run that doesn't exist is skipped with a message.
 
 ```bash
 Sinteract -n 72 -c 1 -m 256G -t 04:00:00 -p academic
+cd ~/dev-v2/Hi-COLA        # the clone of the pipeline used (~/Hi-COLA for main)
 conda activate hicola
 ipnport=$(shuf -i8000-9999 -n1)
 jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 ```
+
+Start the server inside the clone: kernels of a remote server (e.g. VSCode connected to it)
+start in the server's folder, and the notebooks find the repository (and through it the
+HODDIES clone) from their working directory. From `~` the first cell fails with
+`StopIteration`; from the other clone it silently uses that pipeline. One server per pipeline.
 
 ## 10. Adding runs or reference simulations
 
