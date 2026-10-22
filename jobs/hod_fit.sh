@@ -58,7 +58,7 @@ MOCK_SEED="1"
 MODEL_SEEDS="2 3 4 5 6 7 8 9 10 11"
 # HOD modelled at the end for comparison with the best fit (all the tracer's values of this
 # HODDIES parameter file, same seeds), relative to the Hi-COLA folder; or "none"
-REFERENCE_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500.yaml"
+REFERENCE_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500_reference.yaml"
 
 # Minimizer (stochopy): method (cmaes, de, pso, cpso, vdcma, na), iterations, population per
 # iteration (evaluated in parallel by the MPI ranks), tolerance on the parameters; starting point
