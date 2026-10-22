@@ -12,8 +12,10 @@
 #SBATCH --partition=academic
 # Fit of the HOD parameters on the halo catalog of one snapshot of a Hi-COLA run to measured
 # clustering (wp and xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py).
-# Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<FIT_NAME>/,
-# shown by Notebooks/HOD_fit_results.ipynb.
+# Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<name>/,
+# named after what is fitted, e.g. LRG_SHOD_6p_wp+xi02 (tracer, HOD model, number of free
+# parameters, statistics): a new fit of the same thing replaces the earlier results. Shown by
+# Notebooks/HOD_fit_results.ipynb.
 #
 # Edit the parameters below, then submit it (from any folder):
 #   sbatch ~/dev-v2/Hi-COLA/jobs/hod_fit.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_fit.sh)
@@ -24,12 +26,9 @@
 RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
 REDSHIFT="0.500"
 
-# Name of this fit (a new one for each fit: the results folder must not exist yet)
-FIT_NAME="LRG_wp+xi_cmaes_1"
-
 # HOD model and the values of the fixed parameters: HODDIES parameter file (relative to the
 # Hi-COLA folder); its fit settings (fit_param) are not used, they are set here.
-HOD_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500.yaml"
+HOD_PARAM_FILE="Notebooks/HOD_parameter_file_optimizer.yaml"
 TRACER="LRG"
 # Free parameters and their (flat) priors, name:min:max
 PRIORS="M_0:12.5:13.5 M_1:13:14.5 alpha:0.5:1.5 f_sigv:0.5:1.5 log_Mcent:12.4:13.5 sigma_M:0.05:1"
@@ -118,12 +117,11 @@ DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
 FIT=(--method "$METHOD" --maxiter "$MAXITER" --popsize "$POPSIZE" --xtol "$XTOL" --start "$START"
      --start-seed "$START_SEED" --mock-seed "$MOCK_SEED" --model-seeds "${MODEL_SEED_LIST[@]}"
-     --fit-name "$FIT_NAME" --job-log "$JOB_LOG")
+     --job-log "$JOB_LOG")
 
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
-echo "Fit:            $FIT_NAME"
 echo "HOD:            $TRACER, $HOD_PARAM_FILE"
 echo "Priors:         $PRIORS"
 echo "Data:           $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $RP_REBIN, pi_max $PIMAX; xi_ell: ells $ELLS, s in [$S_RANGE] Mpc/h, rebin $S_REBIN"

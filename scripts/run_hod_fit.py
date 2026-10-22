@@ -14,7 +14,9 @@ Model:  HODDIES mocks on the run's halo array, all with the same seed, measured 
 Fit:    a stochopy minimizer (e.g. cmaes) over the free HOD parameters within their priors; the
         other HOD parameters are those of the HOD parameter file.
 
-Output (hp.hod_fit_dir, kept in hicola_data next to the run's measurements; must not exist yet):
+Output (hp.hod_fit_dir, kept in hicola_data next to the run's measurements), in a folder named
+after what is fitted: <tracer>_<HOD model>_<n free>p_<statistics>, e.g. LRG_SHOD_6p_wp+xi02 (HODDIES'
+fit model name + the statistics); a new fit of the same thing replaces it:
     settings.json              the settings of the fit, the run and the code versions
     <HOD parameter file>.yaml  copy of the HOD parameter file
     data.npz                   the fitted data: separations, values, errors, data vector, covariance
@@ -89,7 +91,6 @@ def parse_args() -> argparse.Namespace:
     fit.add_argument("--start-seed", type=int, required=True, help="seed of the starting point and of the minimizer")
     fit.add_argument("--mock-seed", type=int, required=True, help="HOD seed of every mock of the fit")
     fit.add_argument("--model-seeds", type=int, nargs="+", required=True, help="extra seeds for the best-fit model")
-    parser.add_argument("--fit-name", required=True)
     parser.add_argument("--job-log", default="", help="SLURM log of the job (recorded in settings.json)")
     args = parser.parse_args()
 
@@ -201,7 +202,7 @@ def run_cosmology(args: argparse.Namespace):
                      N_eff=args.neff, n_s=args.n_s, m_ncdm=[], engine="class")
 
 
-def build_hod(hoddies: dict, halos: np.ndarray, data: dict, args: argparse.Namespace, fit_dir: Path, verbose: bool):
+def build_hod(hoddies: dict, halos: np.ndarray, data: dict, args: argparse.Namespace, verbose: bool):
     """HOD object of the run with the fit settings: priors, statistics, bins of the data, data and covariance."""
     base_catalog = hoddies["Base_catalogue"](
         {column: halos[column] for column in halos.dtype.names},  # a dict: a structured array is refused
@@ -234,9 +235,15 @@ def build_hod(hoddies: dict, halos: np.ndarray, data: dict, args: argparse.Names
     fit_param["fit_statistics"] = list(args.statistics)
     fit_param["add_poisson_noise"] = False
     fit_param["hartlap_factor"] = 0
-    fit_param["dir_output_fit"] = str(fit_dir)
     hod.initialize_fit(data["data_vec"], data["cov"])
     return hod
+
+
+def fit_name(hod, args: argparse.Namespace) -> str:
+    """Name of the fit from what is fitted: HODDIES' fit model name (tracer, HOD model, extensions,
+    number of free parameters) and the statistics, e.g. LRG_SHOD_6p_wp+xi02."""
+    labels = ["wp" if s == "wp" else "xi" + "".join(str(ell) for ell in args.ells) for s in args.statistics]
+    return f"{hod.fit_model_name}_{'+'.join(labels)}"
 
 
 class Objective:
@@ -337,7 +344,6 @@ def main() -> int:
             print(message, flush=True)
 
     run = (args.target, args.model, args.realization, args.redshift)
-    fit_dir = hp.hod_fit_dir(*run, args.fit_name)
     hoddies = import_hoddies()
     halo_array = hp.hoddies_catalog_file(*run)
     catalog_file = hp.halo_catalog_file(*run)
@@ -346,14 +352,11 @@ def main() -> int:
     problem, data = None, None
     if root:
         try:
-            if fit_dir.exists() and any(fit_dir.iterdir()):
-                raise SystemExit(f"{fit_dir} exists and is not empty: choose another FIT_NAME (or remove the folder)")
             metadata = load_catalog_metadata(catalog_file)
             require_peculiar_velocities(metadata, catalog_file)
             if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
                 raise SystemExit(f"--boxsize {args.boxsize} differs from the halo catalog's {metadata['boxsize']}")
             data = load_data(args)
-            (fit_dir / "evaluations").mkdir(parents=True)
         except SystemExit as exc:
             problem = str(exc)
     problem = comm.bcast(problem, root=0)
@@ -367,10 +370,20 @@ def main() -> int:
     say(f"Data vector:    {data['data_vec'].size} values ({' + '.join(args.statistics)})"
         + (f", wp: {data['rp'].size} rp bins {data['edges_rp'][0]:.4g}-{data['edges_rp'][-1]:.4g} Mpc/h" if "wp" in data else "")
         + (f", xi_ell: {data['s'].size} s bins {data['edges_s'][0]:.4g}-{data['edges_s'][-1]:.4g} Mpc/h" if "s" in data else ""))
-    say(f"Output:         {fit_dir}")
 
     halos = np.load(halo_array)
-    hod = build_hod(hoddies, halos, data, args, fit_dir, verbose=root)
+    hod = build_hod(hoddies, halos, data, args, verbose=root)
+    name = fit_name(hod, args)
+    fit_dir = hp.hod_fit_dir(*run, name)
+    hod.args["fit_param"]["dir_output_fit"] = str(fit_dir)
+    if root:
+        if fit_dir.exists():
+            shutil.rmtree(fit_dir)  # results of an earlier fit of the same thing
+            say(f"Replaces:       the earlier results in {fit_dir}")
+        (fit_dir / "evaluations").mkdir(parents=True)
+    comm.Barrier()
+    say(f"Fit:            {name}")
+    say(f"Output:         {fit_dir}")
     import logging
     logging.getLogger("hoddies").setLevel(logging.ERROR)  # no per-evaluation messages during the fit
     say(f"{args.tracer} HOD:        {json.dumps(hod.args[args.tracer], default=str)}")
@@ -388,7 +401,7 @@ def main() -> int:
 
     if root:
         settings = {
-            "fit_name": args.fit_name, "run": hp.simulation_name(args.target, args.model, args.realization),
+            "fit_name": name, "run": hp.simulation_name(args.target, args.model, args.realization),
             "target": args.target, "model": args.model, "realization": args.realization,
             "redshift": args.redshift, "boxsize": args.boxsize, "halo_catalog": str(halo_array),
             "cosmology": {"h": args.h, "Omega_cdm": args.omega_cdm, "Omega_b": args.omega_b, "T_cmb": args.tcmb,
