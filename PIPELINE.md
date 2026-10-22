@@ -237,6 +237,7 @@ on the command line.
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `FIT_NAME`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -358,12 +359,18 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   same columns and bins. The `.json` also holds the mark (R, coefficients, m̄, min and max of m on
   the mesh), and the `.h5` has m_bar, m_min, m_max as attributes, as acm writes them. The file
   name does not contain the mark: a rerun with another mark overwrites it (check the `.json`).
-- **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<fit_name>/`
-  (`Notebooks/HOD_fit.ipynb`, `hp.hod_fit_dir`): HODDIES' `dir_output_fit`, set by the notebook
-  from the run and its `fit_name` (the parameter file has `dir_output_fit: null`). Written there
-  directly, not on scratch. Holds HODDIES' results, a copy of the parameter file and
-  `fit_info.json` (run, z, halo catalog, tracer, seed, nthreads, HODDIES commit). A new
-  `fit_name` for each fit; the same name writes into the same folder.
+- **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<FIT_NAME>/`
+  (`jobs/hod_fit.sh`, `scripts/run_hod_fit.py`, `hp.hod_fit_dir`; shown by `HOD_fit_results.ipynb`,
+  read with `an.load_hod_fit`), written there directly (not on scratch); the job refuses a folder
+  that exists and is not empty, so each fit has its own `FIT_NAME`:
+  `settings.json` (all settings of the job, run, H(z), code versions, job log), a copy of the HOD
+  parameter file, `data.npz` (the fitted data: separations, values, errors, data vector, covariance,
+  bin edges), `evaluations/rank_<k>.txt` (every evaluation of rank k: parameters, chi2, galaxies,
+  failed flag, time; written as the fit runs), `iterations.txt` (best point of each iteration),
+  and at the end `best_fit.json` (best evaluation of the whole fit, chi2 and per dof, p-value,
+  galaxies, minimizer status) and `best_fit_model.npz` (model vectors at the best fit for the fit
+  seed and the extra seeds, HOD occupation). `HOD_fit.ipynb` (exploration) also writes its
+  `fit_info.json` and HODDIES' `best_fit_result_*.npy` into a folder of this form.
 
 ## 9. Notebooks
 
@@ -401,7 +408,8 @@ imports:
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
 | `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, HOD name (with `{seed}`), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
-| `HOD_fit.ipynb` | HOD fitting with HODDIES (in progress): loads a run's halo array into HODDIES as `hod_mock.sh` does, one check mock, the `fit_param` settings | target, model, realization, redshift, parameter file, tracer, nthreads, seed |
+| `HOD_fit.ipynb` | exploration of HOD fitting with HODDIES (the fits themselves: `jobs/hod_fit.sh`) | target, model, realization, redshift, parameter file, tracer, nthreads, seed |
+| `HOD_fit_results.ipynb` | results of a fit of `jobs/hod_fit.sh` (also while it runs): settings, best-fit parameters against priors, chi2 (total, per block, other seeds), data vs best-fit model with residuals, convergence, parameters of every evaluation, HOD occupation | target, model, realization, redshift, fit_name |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` | table names |
 | `scan.ipynb` | scan of the nDGP frontend parameters | template `Frontend_parameter_files/nDGP_scan/nDGP_scan.ini` |
 | `halos.ipynb`, `overdensity.ipynb` | older analyses kept as starting points; they point to runs that no longer exist | — |

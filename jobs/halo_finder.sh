@@ -56,7 +56,7 @@ if [ "$TARGET" = standalone ]; then
 fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
 FOF=(--linking-length "$LINKING_LENGTH" --nmin "$NMIN" --mdef "$MDEF")
-COSMOLOGY=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
+COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --omega-lambda "$COSMO_OMEGA_LAMBDA" --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF" --n-s "$COSMO_NS")
 read -r -a GRID <<< "$HMF_MASS_GRID"
 
@@ -78,7 +78,7 @@ echo "================================================================"
 unset SLURM_MEM_PER_NODE SLURM_MEM_PER_GPU SLURM_CPU_BIND SLURM_CPU_BIND_LIST SLURM_CPU_BIND_TYPE
 
 time srun --mpi=pmix --cpu-bind=none -n "${SLURM_NTASKS}" \
-    python "$HICOLA_ROOT/scripts/run_halo_catalog.py" "${RUN[@]}" "${FOF[@]}" "${COSMOLOGY[@]}"
+    python "$HICOLA_ROOT/scripts/run_halo_catalog.py" "${RUN[@]}" "${FOF[@]}" "${COSMO_ARGS[@]}"
 
 time python "$HICOLA_ROOT/scripts/run_halo_outputs.py" "${RUN[@]}" --mass-grid "${GRID[@]}"
 

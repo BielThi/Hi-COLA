@@ -69,7 +69,7 @@ if [ "$TARGET" = standalone ]; then
     exit 1
 fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
-COSMOLOGY=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
+COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF")
 read -r -a SEED_LIST <<< "$SEEDS"
 MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS")
@@ -93,6 +93,6 @@ echo "Resources:      ${SLURM_CPUS_PER_TASK:-?} CPUs"
 echo "================================================================"
 
 export NUMBA_NUM_THREADS="$NTHREADS"
-time python "$HICOLA_ROOT/scripts/run_hod_mock.py" "${RUN[@]}" "${COSMOLOGY[@]}" "${MOCK[@]}" "${PK[@]}" "${MARK[@]}"
+time python "$HICOLA_ROOT/scripts/run_hod_mock.py" "${RUN[@]}" "${COSMO_ARGS[@]}" "${MOCK[@]}" "${PK[@]}" "${MARK[@]}"
 
 python "$HICOLA_ROOT/scripts/collect_products.py" "$TARGET" "$MODEL" "$REALIZATION"

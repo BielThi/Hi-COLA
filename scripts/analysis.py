@@ -148,6 +148,42 @@ def load_hod_spectra(target: str, model: str, realization: str, redshift: float,
     return k, {ell: np.vstack([poles[ell] for _, poles in tables]) for ell in tables[0][1]}
 
 
+def load_hod_fit(target: str, model: str, realization: str, redshift: float, fit_name: str) -> dict:
+    """Results of a HOD fit (jobs/hod_fit.sh) from its folder, hp.hod_fit_dir.
+
+    Returns a dict: 'dir', 'settings' (dict), 'data' (dict of arrays), 'evaluations' (structured
+    array of every evaluation, all ranks, in order of time), 'iterations' (structured array, one row
+    per iteration of the minimizer), and, once the fit has finished, 'best_fit' (dict) and 'model'
+    (dict of arrays); None while it runs or if it stopped before the end.
+    """
+    folder = hp.hod_fit_dir(target, model, realization, redshift, fit_name)
+    if not (folder / "settings.json").exists():
+        raise FileNotFoundError(f"No HOD fit '{fit_name}' for {target}/{model}/{realization} at z={redshift:.3f} "
+                                f"({folder}/settings.json missing). Run jobs/hod_fit.sh with FIT_NAME={fit_name}.")
+    import json
+
+    def read_table(path):
+        table = np.genfromtxt(path, names=True, ndmin=1)
+        return table if table.size else None
+
+    rank_tables = [read_table(path) for path in sorted((folder / "evaluations").glob("rank_*.txt"))]
+    rank_tables = [table for table in rank_tables if table is not None]
+    evaluations = np.concatenate(rank_tables) if rank_tables else None
+    if evaluations is not None:
+        evaluations = evaluations[np.argsort(evaluations["time_s"], kind="stable")]
+    iterations = read_table(folder / "iterations.txt") if (folder / "iterations.txt").exists() else None
+    finished = (folder / "best_fit.json").exists()
+    return {
+        "dir": folder,
+        "settings": json.loads((folder / "settings.json").read_text()),
+        "data": dict(np.load(folder / "data.npz")),
+        "evaluations": evaluations,
+        "iterations": iterations,
+        "best_fit": json.loads((folder / "best_fit.json").read_text()) if finished else None,
+        "model": dict(np.load(folder / "best_fit_model.npz")) if finished else None,
+    }
+
+
 # ---------------------------------------------------------------- combining
 
 
