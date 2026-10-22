@@ -153,8 +153,9 @@ def load_hod_fit(target: str, model: str, realization: str, redshift: float, fit
 
     Returns a dict: 'dir', 'settings' (dict), 'data' (dict of arrays), 'evaluations' (structured
     array of every evaluation, all ranks, in order of time), 'iterations' (structured array, one row
-    per iteration of the minimizer), and, once the fit has finished, 'best_fit' (dict) and 'model'
-    (dict of arrays); None while it runs or if it stopped before the end.
+    per iteration of the minimizer), and, once the fit has finished, 'best_fit' (dict), 'model'
+    (dict of arrays) and 'reference' (dict of arrays, the model of the reference HOD, if the fit had
+    one); None while it runs or if it stopped before the end.
     """
     folder = hp.hod_fit_dir(target, model, realization, redshift, fit_name)
     if not (folder / "settings.json").exists():
@@ -181,6 +182,7 @@ def load_hod_fit(target: str, model: str, realization: str, redshift: float, fit
         "iterations": iterations,
         "best_fit": json.loads((folder / "best_fit.json").read_text()) if finished else None,
         "model": dict(np.load(folder / "best_fit_model.npz")) if finished else None,
+        "reference": dict(np.load(folder / "reference_model.npz")) if (folder / "reference_model.npz").exists() else None,
     }
 
 

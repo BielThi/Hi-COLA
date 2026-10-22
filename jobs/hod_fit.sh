@@ -54,13 +54,16 @@ CORRELATION="DESI_Y1_LRG/M_corr_lrg_z0.5.txt"
 LOS="z"
 MOCK_SEED="1"
 MODEL_SEEDS="2 3 4 5 6 7 8 9 10 11"
+# HOD modelled at the end for comparison with the best fit (all the tracer's values of this
+# HODDIES parameter file, same seeds), relative to the Hi-COLA folder; or "none"
+REFERENCE_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500.yaml"
 
 # Minimizer (stochopy): method (cmaes, de, pso, cpso, vdcma, na), iterations, population per
 # iteration (evaluated in parallel by the MPI ranks), tolerance on the parameters; starting point
 # "random" (drawn in the priors) or "param_file" (the values of HOD_PARAM_FILE), and the seed of
 # the start and of the minimizer
 METHOD="cmaes"
-MAXITER="100"
+MAXITER="500"
 POPSIZE="72"
 XTOL="1e-2"
 START="random"
@@ -87,6 +90,7 @@ source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")
 HOD_PARAM_FILE=$(readlink -f "$HOD_PARAM_FILE")
+if [ "$REFERENCE_PARAM_FILE" != none ]; then REFERENCE_PARAM_FILE=$(readlink -f "$REFERENCE_PARAM_FILE"); fi
 data_path() { case "$1" in /*|none) echo "$1" ;; *) echo "$HICOLA_DATA_ROOT/$1" ;; esac; }
 DATA_RPPI=$(data_path "$DATA_RPPI")
 DATA_SMU=$(data_path "$DATA_SMU")
@@ -116,7 +120,7 @@ DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$
       --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --los "$LOS")
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
 FIT=(--method "$METHOD" --maxiter "$MAXITER" --popsize "$POPSIZE" --xtol "$XTOL" --start "$START"
-     --start-seed "$START_SEED" --mock-seed "$MOCK_SEED" --model-seeds "${MODEL_SEED_LIST[@]}"
+     --start-seed "$START_SEED" --mock-seed "$MOCK_SEED" --model-seeds "${MODEL_SEED_LIST[@]}" --reference-param-file "$REFERENCE_PARAM_FILE"
      --job-log "$JOB_LOG")
 
 hicola_print_env
@@ -129,6 +133,7 @@ echo "                $DATA_RPPI"
 echo "                $DATA_SMU"
 echo "Covariance:     jackknife errors x $CORRELATION"
 echo "Model:          RSD along $LOS, mock seed $MOCK_SEED, extra seeds of the best fit $MODEL_SEEDS"
+echo "Reference HOD:  $REFERENCE_PARAM_FILE"
 echo "Minimizer:      $METHOD, maxiter $MAXITER, popsize $POPSIZE, xtol $XTOL, start $START (seed $START_SEED)"
 echo "Resources:      ${SLURM_JOB_NUM_NODES:-1} node(s), $NRANKS MPI ranks x $NTHREADS threads"
 echo "================================================================"

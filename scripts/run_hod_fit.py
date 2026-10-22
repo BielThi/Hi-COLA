@@ -24,6 +24,7 @@ fit model name + the statistics); a new fit of the same thing replaces it:
     iterations.txt             per iteration of the minimizer: its best chi2 and parameters (as it goes)
     best_fit.json              best-fit parameters (best evaluation of the whole fit), chi2, minimizer status
     best_fit_model.npz         the model at the best fit (fit seed and extra seeds) and its HOD occupation
+    reference_model.npz        the same for the HOD of a reference parameter file (if given), for comparison
 
     srun --mpi=pmix -n 18 python scripts/run_hod_fit.py --target Abacus_Small --model LCDM \\
         --realization s1234 --redshift 0.5 --boxsize 500 ... (see jobs/hod_fit.sh)
@@ -91,6 +92,8 @@ def parse_args() -> argparse.Namespace:
     fit.add_argument("--start-seed", type=int, required=True, help="seed of the starting point and of the minimizer")
     fit.add_argument("--mock-seed", type=int, required=True, help="HOD seed of every mock of the fit")
     fit.add_argument("--model-seeds", type=int, nargs="+", required=True, help="extra seeds for the best-fit model")
+    fit.add_argument("--reference-param-file", required=True,
+                     help="HODDIES parameter file whose HOD is modelled at the end for comparison, or 'none'")
     parser.add_argument("--job-log", default="", help="SLURM log of the job (recorded in settings.json)")
     args = parser.parse_args()
 
@@ -305,6 +308,32 @@ def best_fit_model(hod, hoddies: dict, x: np.ndarray, args: argparse.Namespace) 
     params = np.array([x], dtype="float64")
     params.dtype = [(name, "float64") for name in hod.name_params]
     hod.update_new_param(params, hod.name_params)
+    return model_statistics(hod, hoddies, args)
+
+
+def reference_hod(path: Path, tracer: str) -> dict:
+    """HOD of the tracer in a reference parameter file (all its values, not only the free ones)."""
+    import yaml
+
+    content = yaml.safe_load(Path(path).read_text())
+    if tracer not in (content or {}):
+        raise SystemExit(f"The reference parameter file {path} has no {tracer} section")
+    return content[tracer]
+
+
+def same_hod_value(key: str, a, b) -> bool:
+    """Whether two values of a HOD parameter have the same effect (no smearing: None or 0; no
+    assembly bias: all coefficients 0, whatever the variables listed)."""
+    if key == "vsmear":
+        return (a in (None, 0)) and (b in (None, 0)) or a == b
+    if key == "assembly_bias" and isinstance(a, dict) and isinstance(b, dict):
+        zero = lambda d: all(np.all(np.asarray(v) == 0) for v in d.values())
+        return (zero(a) and zero(b)) or a == b
+    return a == b
+
+
+def model_statistics(hod, hoddies: dict, args: argparse.Namespace) -> dict:
+    """Model statistics at the current HOD for the fit seed and the extra seeds, chi2, and the HOD occupation."""
     model = {"seeds": np.array([args.mock_seed, *args.model_seeds])}
     vectors, n_gal, n_cen = [], [], []
     for seed in model["seeds"]:
@@ -357,6 +386,8 @@ def main() -> int:
             if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
                 raise SystemExit(f"--boxsize {args.boxsize} differs from the halo catalog's {metadata['boxsize']}")
             data = load_data(args)
+            if args.reference_param_file != "none":
+                reference_hod(args.reference_param_file, args.tracer)
         except SystemExit as exc:
             problem = str(exc)
     problem = comm.bcast(problem, root=0)
@@ -412,7 +443,8 @@ def main() -> int:
                      "correlation": args.correlation, "pimax": args.pimax, "rp_rebin": args.rp_rebin,
                      "rp_range": args.rp_range, "ells": args.ells, "s_rebin": args.s_rebin,
                      "s_range": args.s_range, "n_data": int(data["data_vec"].size)},
-            "model": {"los": args.los, "rsd": True, "mock_seed": args.mock_seed, "model_seeds": args.model_seeds},
+            "model": {"los": args.los, "rsd": True, "mock_seed": args.mock_seed, "model_seeds": args.model_seeds,
+                      "reference_param_file": str(args.reference_param_file)},
             "minimizer": {"package": "stochopy", "method": args.method, "maxiter": args.maxiter,
                           "popsize": args.popsize, "xtol": args.xtol, "start": args.start,
                           "start_seed": args.start_seed, "x0": dict(zip(hod.name_params, x0.tolist()))},
@@ -423,6 +455,8 @@ def main() -> int:
         }
         (fit_dir / "settings.json").write_text(json.dumps(settings, indent=2, default=str))
         shutil.copy2(args.hod_param_file, fit_dir / args.hod_param_file.name)
+        if args.reference_param_file != "none":
+            shutil.copy2(args.reference_param_file, fit_dir / Path(args.reference_param_file).name)
         np.savez(fit_dir / "data.npz", **data)
         iterations = open(fit_dir / "iterations.txt", "w", buffering=1)
         iterations.write("# iteration n_evaluations time_s chi2 " + " ".join(hod.name_params) + "\n")
@@ -474,7 +508,26 @@ def main() -> int:
                                                   "parameters": dict(zip(hod.name_params, np.asarray(result.x).tolist()))}},
             "time_h": fit_time / 3600, "finished": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
-        (fit_dir / "best_fit.json").write_text(json.dumps(best, indent=2))
+        if args.reference_param_file != "none":
+            fitted_hod = dict(hod.args[args.tracer])
+            reference = reference_hod(args.reference_param_file, args.tracer)
+            hod.args[args.tracer].update(reference)
+            ref_model = model_statistics(hod, hoddies, args)
+            np.savez(fit_dir / "reference_model.npz", **ref_model)
+            differs = {key: [fitted_hod.get(key), value] for key, value in reference.items()
+                       if key not in args.priors and not same_hod_value(key, fitted_hod.get(key), value)}
+            best["reference"] = {
+                "param_file": str(args.reference_param_file),
+                "parameters": {f"{name}_{args.tracer}": reference.get(name) for name in args.priors},
+                "other_differences": differs,
+                "chi2": float(ref_model["chi2"][0]), "chi2_per_dof": float(ref_model["chi2"][0]) / (n_data - n_free),
+                "n_galaxies": int(ref_model["n_gal"][0]), "number_density": float(ref_model["n_gal"][0] / args.boxsize**3),
+                "satellite_fraction": float(1 - ref_model["n_cen"][0] / ref_model["n_gal"][0]),
+            }
+            say(f"Reference:      {Path(args.reference_param_file).name}: chi2 {ref_model['chi2'][0]:.3f} "
+                f"(extra seeds {np.round(ref_model['chi2'][1:], 1).tolist()})"
+                + (f"; other HOD values differ from the fit's: {differs}" if differs else ""))
+        (fit_dir / "best_fit.json").write_text(json.dumps(best, indent=2, default=str))
         say(f"Best fit:       chi2 {best_chi2:.3f} for {n_data} - {n_free} = {n_data - n_free} dof "
             f"(recomputed {model['chi2'][0]:.3f}; extra seeds {np.round(model['chi2'][1:], 1).tolist()})")
         say(f"Parameters:     {json.dumps(best['parameters'])}")
