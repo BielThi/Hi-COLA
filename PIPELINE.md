@@ -237,7 +237,8 @@ on the command line.
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
-| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_ROWS`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
+| `hod_fit_wp.sh` | the same fit on wp only (no xi_ell settings; `CORRELATION_ROWS="0:17"`, the wp block of `M_corr_lrg_z0.5.txt`); separate copy of `hod_fit.sh` for now | as `hod_fit.sh` | `sbatch jobs/hod_fit_wp.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -414,6 +415,7 @@ imports:
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
 | `HOD_fit.ipynb` | exploration of HOD fitting with HODDIES (the fits themselves: `jobs/hod_fit.sh`) | target, model, realization, redshift, parameter file, tracer, nthreads, seed |
 | `HOD_fit_results.ipynb` | results of a fit of `jobs/hod_fit.sh` (also while it runs): settings, best-fit parameters against priors, chi2 (total, per block, other seeds), data vs best-fit and reference-HOD models with residuals, convergence, parameters of every evaluation, HOD occupation | target, model, realization, redshift, fit name (printed by the job) |
+| `HOD_fit_wp_results.ipynb` | the same for the wp-only fits of `hod_fit_wp.sh` (separate copy for now) | target, model, realization, redshift, fit name (e.g. `LRG_SHOD_6p_wp`) |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` | table names |
 | `scan.ipynb` | scan of the nDGP frontend parameters | template `Frontend_parameter_files/nDGP_scan/nDGP_scan.ini` |
 | `halos.ipynb`, `overdensity.ipynb` | older analyses kept as starting points; they point to runs that no longer exist | — |

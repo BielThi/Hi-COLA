@@ -72,15 +72,19 @@ def parse_args() -> argparse.Namespace:
     hod.add_argument("--nthreads", type=int, required=True, help="HODDIES and pycorr threads per rank (the mock depends on it)")
     data = parser.add_argument_group("data")
     data.add_argument("--statistics", nargs="+", required=True, choices=STATISTICS)
-    data.add_argument("--data-rppi", type=Path, required=True, help="pycorr estimator in (rp, pi), for wp")
-    data.add_argument("--data-smu", type=Path, required=True, help="pycorr estimator in (s, mu), for xi_ell")
     data.add_argument("--correlation", required=True, help="correlation matrix file (text) of the data vector, or 'none'")
-    data.add_argument("--pimax", type=float, required=True)
-    data.add_argument("--rp-rebin", type=int, required=True)
-    data.add_argument("--rp-range", type=float, nargs=2, required=True, metavar=("MIN", "MAX"))
-    data.add_argument("--ells", type=int, nargs="+", required=True)
-    data.add_argument("--s-rebin", type=int, required=True)
-    data.add_argument("--s-range", type=float, nargs=2, required=True, metavar=("MIN", "MAX"))
+    data.add_argument("--correlation-rows", required=True,
+                      help="rows (and columns) of the correlation matrix for the fitted data vector: 'all' or START:STOP")
+    wp = parser.add_argument_group("wp (required when fitting wp)")
+    wp.add_argument("--data-rppi", type=Path, help="pycorr estimator in (rp, pi)")
+    wp.add_argument("--pimax", type=float)
+    wp.add_argument("--rp-rebin", type=int)
+    wp.add_argument("--rp-range", type=float, nargs=2, metavar=("MIN", "MAX"))
+    xi = parser.add_argument_group("xi_ell (required when fitting xi_ells)")
+    xi.add_argument("--data-smu", type=Path, help="pycorr estimator in (s, mu)")
+    xi.add_argument("--ells", type=int, nargs="+")
+    xi.add_argument("--s-rebin", type=int)
+    xi.add_argument("--s-range", type=float, nargs=2, metavar=("MIN", "MAX"))
     data.add_argument("--los", required=True, choices=["x", "y", "z"], help="line of sight of the model (box axis)")
     fit = parser.add_argument_group("minimizer")
     fit.add_argument("--method", required=True, help="stochopy method, e.g. cmaes, de, pso, cpso, vdcma, na")
@@ -101,6 +105,17 @@ def parse_args() -> argparse.Namespace:
     if len(set(args.statistics)) != len(args.statistics):
         raise SystemExit(f"--statistics has duplicates: {args.statistics}")
     args.statistics = [s for s in STATISTICS if s in args.statistics]  # the order of the data vector
+    needed = {"wp": ["data_rppi", "pimax", "rp_rebin", "rp_range"], "xi_ells": ["data_smu", "ells", "s_rebin", "s_range"]}
+    for statistic in args.statistics:
+        missing = ["--" + name.replace("_", "-") for name in needed[statistic] if getattr(args, name) is None]
+        if missing:
+            raise SystemExit(f"Fitting {statistic} needs {' '.join(missing)}")
+    if args.correlation_rows != "all":
+        try:
+            start, stop = (int(v) for v in args.correlation_rows.split(":"))
+        except ValueError:
+            raise SystemExit(f"--correlation-rows must be 'all' or START:STOP, got {args.correlation_rows!r}")
+        args.correlation_rows = slice(start, stop)
     if args.omega_mnu != 0:
         raise SystemExit("Massive neutrinos are not handled in the H(z) of the fit (omega_mnu must be 0)")
     return args
@@ -164,9 +179,12 @@ def load_data(args: argparse.Namespace) -> dict:
         correlation = np.eye(data_vec.size)
     else:
         correlation = np.loadtxt(args.correlation)
+        if args.correlation_rows != "all":
+            correlation = correlation[args.correlation_rows, args.correlation_rows]
         if correlation.shape != (data_vec.size, data_vec.size):
-            raise SystemExit(f"The correlation matrix {args.correlation} is {correlation.shape}, the data vector has "
-                             f"{data_vec.size} values ({' + '.join(args.statistics)}): the ranges or rebinning differ")
+            raise SystemExit(f"The correlation matrix {args.correlation} (rows {args.correlation_rows}) is {correlation.shape}, "
+                             f"the data vector has {data_vec.size} values ({' + '.join(args.statistics)}): the ranges, "
+                             "rebinning or rows differ")
     data.update(data_vec=data_vec, data_err=data_err, correlation=correlation,
                 cov=np.outer(data_err, data_err) * correlation)
     return data
@@ -440,7 +458,8 @@ def main() -> int:
             "hod_param_file": args.hod_param_file.name, "tracer": args.tracer,
             "hod_parameters": hod.args[args.tracer], "priors": args.priors,
             "data": {"statistics": args.statistics, "rppi": str(args.data_rppi), "smu": str(args.data_smu),
-                     "correlation": args.correlation, "pimax": args.pimax, "rp_rebin": args.rp_rebin,
+                     "correlation": args.correlation, "correlation_rows": str(args.correlation_rows),
+                     "pimax": args.pimax, "rp_rebin": args.rp_rebin,
                      "rp_range": args.rp_range, "ells": args.ells, "s_rebin": args.s_rebin,
                      "s_range": args.s_range, "n_data": int(data["data_vec"].size)},
             "model": {"los": args.los, "rsd": True, "mock_seed": args.mock_seed, "model_seeds": args.model_seeds,

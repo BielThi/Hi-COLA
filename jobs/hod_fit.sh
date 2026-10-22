@@ -48,6 +48,8 @@ S_RANGE="0.2 32"          # with the files above: 26 bins, 0.215 to 31.6 Mpc/h
 # Covariance = (jackknife errors of the data) x (this correlation matrix of the data vector, e.g.
 # from mocks; relative to $HICOLA_DATA_ROOT or absolute), or "none" for a diagonal covariance
 CORRELATION="DESI_Y1_LRG/M_corr_lrg_z0.5.txt"
+# Rows (and columns) of that matrix for the fitted data vector: "all", or START:STOP (python slice)
+CORRELATION_ROWS="all"
 
 # Model: line of sight of the redshift-space distortions (box axis); HOD seed of every mock of the
 # fit; extra seeds of the best-fit model (for its mock-to-mock scatter)
@@ -115,7 +117,7 @@ read -r -a STATISTIC_LIST <<< "$STATISTICS"
 read -r -a RP_LIST <<< "$RP_RANGE"
 read -r -a S_LIST <<< "$S_RANGE"
 read -r -a ELL_LIST <<< "$ELLS"
-DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION"
+DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-rows "$CORRELATION_ROWS"
       --pimax "$PIMAX" --rp-rebin "$RP_REBIN" --rp-range "${RP_LIST[@]}"
       --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --los "$LOS")
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
@@ -131,7 +133,7 @@ echo "Priors:         $PRIORS"
 echo "Data:           $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $RP_REBIN, pi_max $PIMAX; xi_ell: ells $ELLS, s in [$S_RANGE] Mpc/h, rebin $S_REBIN"
 echo "                $DATA_RPPI"
 echo "                $DATA_SMU"
-echo "Covariance:     jackknife errors x $CORRELATION"
+echo "Covariance:     jackknife errors x $CORRELATION (rows $CORRELATION_ROWS)"
 echo "Model:          RSD along $LOS, mock seed $MOCK_SEED, extra seeds of the best fit $MODEL_SEEDS"
 echo "Reference HOD:  $REFERENCE_PARAM_FILE"
 echo "Minimizer:      $METHOD, maxiter $MAXITER, popsize $POPSIZE, xtol $XTOL, start $START (seed $START_SEED)"
