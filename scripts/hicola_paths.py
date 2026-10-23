@@ -98,6 +98,20 @@ def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hmf.txt"
 
 
+# Tryout with member particles (jobs/halo_finder_particles.sh): a FoF run of its own, whose halo
+# catalog, HODDIES array and particle subsample share the same halo_id
+def ptcl_halo_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
+    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_catalog.npy"
+
+
+def ptcl_hoddies_file(target: str, model: str, realization: str, redshift: float) -> Path:
+    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_hoddies.npy"
+
+
+def ptcl_particles_file(target: str, model: str, realization: str, redshift: float) -> Path:
+    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_particles.npy"
+
+
 HOD_STATISTICS = ("PS", "MPS")  # power spectrum, marked power spectrum
 # HOD outputs of this branch (HODDIES dev-v2) are kept apart from those of the main branch (old
 # HODDIES), which use halo_catalog/hod/ and ..._HOD_<name>_... : the mocks differ between versions.
