@@ -34,6 +34,7 @@ LRG_SHOD_6p_ptcl_rmin-10; a new fit of the same thing replaces it:
     evaluations/rank_<k>.txt   every evaluation made by rank k: parameters, chi2, galaxies (written as it goes)
     iterations.txt             per iteration of the minimizer: its best chi2 and parameters (as it goes)
     best_fit.json              best-fit parameters (best evaluation of the whole fit), chi2, minimizer status
+    best_fit.yaml              HOD parameter file of the best fit, for the mocks of jobs/hod_mock.sh
     best_fit_model.npz         the model at the best fit (fit seed and extra seeds) and its HOD occupation
     reference_model.npz        the same for the HOD of a reference parameter file (if given), for comparison
 
@@ -396,6 +397,31 @@ def reference_hod(path: Path, tracer: str) -> dict:
     return content[tracer]
 
 
+def write_best_fit_yaml(fit_dir: Path) -> Path:
+    """best_fit.yaml in the fit folder, for jobs/hod_mock.sh: the fit's HOD parameter file with the
+    tracer's HOD as used in the fit (settings.json) and its free parameters at the best fit
+    (best_fit.json), and use_particles as the fit's satellites. Only reads files of the fit folder."""
+    import yaml
+
+    settings = json.loads((fit_dir / "settings.json").read_text())
+    best = json.loads((fit_dir / "best_fit.json").read_text())
+    tracer = settings["tracer"]
+    content = yaml.safe_load((fit_dir / settings["hod_param_file"]).read_text())
+    content[tracer] = dict(settings["hod_parameters"])
+    for name in settings["priors"]:
+        content[tracer][name] = best["parameters"][f"{name}_{tracer}"]
+    content["use_particles"] = settings["satellites"] == "particles"
+    path = fit_dir / "best_fit.yaml"
+    header = (f"# Best-fit HOD of the fit {settings['fit_name']} on {settings['run']} at z = {settings['redshift']} "
+              f"(jobs/hod_fit.sh, {settings['started']}):\n"
+              f"# {settings['hod_param_file']} with {tracer} as in the fit and its free parameters "
+              f"{', '.join(settings['priors'])} at the best fit\n"
+              f"# (chi2 {best['chi2']:.2f} for {best['dof']} dof). Satellites of the fit: {settings['satellites']} "
+              f"(SATELLITES in jobs/hod_mock.sh).\n")
+    path.write_text(header + yaml.safe_dump(content, sort_keys=False))
+    return path
+
+
 def same_hod_value(key: str, a, b) -> bool:
     """Whether two values of a HOD parameter have the same effect (no smearing: None or 0; no
     assembly bias: all coefficients 0, whatever the variables listed)."""
@@ -626,6 +652,7 @@ def main() -> int:
                 f"(extra seeds {np.round(ref_model['chi2'][1:], 1).tolist()})"
                 + (f"; other HOD values differ from the fit's: {differs}" if differs else ""))
         (fit_dir / "best_fit.json").write_text(json.dumps(best, indent=2, default=str))
+        best_yaml = write_best_fit_yaml(fit_dir)
         say(f"Best fit:       chi2 {best_chi2:.3f} for {n_data} - {n_free} = {n_data - n_free} dof "
             f"(recomputed {model['chi2'][0]:.3f}; extra seeds {np.round(model['chi2'][1:], 1).tolist()})")
         say(f"Parameters:     {json.dumps(best['parameters'])}")
@@ -634,6 +661,7 @@ def main() -> int:
             + (f", of which {best['sat_nfw_fraction']:.1%} on the NFW profile (too few stored particles)"
                if best["sat_nfw_fraction"] is not None else ""))
         say(f"Saved:          {fit_dir}")
+        say(f"For the mocks:  HOD_PARAM_FILE=\"{best_yaml}\" and SATELLITES=\"{args.satellites}\" in jobs/hod_mock.sh")
     return 0
 
 

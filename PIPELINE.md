@@ -241,7 +241,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
 | `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `FIT_R_MIN`, `FIT_R_MAX`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
@@ -296,7 +296,10 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   noise subtracted, settings from the run file (`pofk_*` lines).
 - **HOD galaxy P(k)** (`jobs/hod_mock.sh`: `scripts/run_hod_mock.py`,
   `scripts/galaxy_power_spectrum.py`): a HODDIES mock of the chosen tracer is made from the halo
-  array, shifted to redshift space along `LOS` by v/(aH(z)) with H(z) of the run's cosmology, and
+  array (satellites on member particles or the NFW profile, `SATELLITES`, as in the fits) with the
+  HOD of `HOD_PARAM_FILE`, normally the `best_fit.yaml` of a fit (see the HOD fit below; the same
+  file for both models compared, e.g. the LCDM fit for LCDM and nDGP, its `density` fixing the number
+  density in each), shifted to redshift space along `LOS` by v/(aH(z)) with H(z) of the run's cosmology, and
   measured with the estimator of the EMC/acm pipeline (copied from acm's
   `scripts/emc/measurements/abacus_small.py`): jaxpower, TSC, interlacing 3, compensation, shot
   noise from jaxpower; `MESHSIZE`, `ELLS`, `K_STEP` from the job (EMC values: 512, 0 2 4, 0.001),
@@ -394,7 +397,9 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   bin edges), `evaluations/rank_<k>.txt` (every evaluation of rank k: parameters, chi2, galaxies,
   failed flag, time; written as the fit runs), `iterations.txt` (best point of each iteration),
   and at the end `best_fit.json` (best evaluation of the whole fit, chi2 and per dof, p-value,
-  galaxies, minimizer status) and `best_fit_model.npz` (model vectors at the best fit for the fit
+  galaxies, minimizer status), `best_fit.yaml` (the HOD parameter file with the tracer as in the
+  fit and its free parameters at the best fit, `use_particles` as `SATELLITES`: the
+  `HOD_PARAM_FILE` of `jobs/hod_mock.sh`, path printed at the end of the log) and `best_fit_model.npz` (model vectors at the best fit for the fit
   seed and the extra seeds, HOD occupation), and `reference_model.npz` the same for the HOD of
   `REFERENCE_PARAM_FILE` (all its values for the tracer, e.g. `HOD_parameter_file_z0.500.yaml`), with
   its chi2 in `best_fit.json` (`reference`) and a copy of the file. `HOD_fit.ipynb` (exploration) also writes its

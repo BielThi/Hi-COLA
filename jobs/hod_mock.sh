@@ -22,10 +22,16 @@ RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_
 # Output redshift of the snapshot (its halo catalog must exist: jobs/halo_finder.sh)
 REDSHIFT="0.500"
 
-# HODDIES parameter file (relative to the Hi-COLA folder) and the tracer of it to populate.
-# If the file sets the tracer's `density`, HODDIES rescales Ac to reach it.
-HOD_PARAM_FILE="Notebooks/HOD_parameter_file_z0.500.yaml"
+# HODDIES parameter file (relative to the Hi-COLA folder, or absolute) and the tracer of it to populate:
+# the best_fit.yaml of a fit (jobs/hod_fit.sh, path printed at the end of its log, line 'For the mocks:'),
+# or any parameter file, e.g. Notebooks/HOD_parameter_file_z0.500.yaml. The same file for every model
+# compared (e.g. the fit on LCDM for both LCDM and nDGP). If it sets the tracer's `density` (the
+# fits do), HODDIES rescales Ac to reach it, in each model.
+HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD-dev-v2_fit_LRG_SHOD_6p_ptcl/best_fit.yaml"
 TRACER="LRG"
+# Satellites: "particles" (random member particles of the halo: jobs/halo_finder.sh with PARTICLE_FRACTION > 0)
+# or "nfw" (HODDIES' NFW profile); as in the fit (its best_fit.yaml says which)
+SATELLITES="particles"
 SEEDS="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20"      # HOD seeds, one mock, P(k) and marked P(k) each, e.g. "1 2 3 4 5"; ~1.5 min per seed at mesh 512 (raise --time above for more than ~35 seeds)
 NTHREADS="32"   # HODDIES threads; the mock of a seed depends on it: keep it fixed across seeds
 
@@ -40,8 +46,9 @@ K_STEP="0.001"   # k-bin width [h/Mpc]
 MARK_RCUT=""            # R [Mpc/h], e.g. "10"
 MARK_COEFFICIENTS=""    # c_0 c_1 c_2 ..., e.g. "1 -0.5"
 
-# Output: halo_catalog/hod_dev-v2/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed
-NAME="${TRACER}_seed{seed}"
+# Output: halo_catalog/hod_dev-v2/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed;
+# name it after the HOD used (e.g. the fit name) so that mocks of different HODs stay apart (name in marked.ipynb)
+NAME="LRG_SHOD_6p_ptcl_seed{seed}"
 # -------------------------------------------------------------------------
 # Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.
 
@@ -72,7 +79,8 @@ RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift
 COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF")
 read -r -a SEED_LIST <<< "$SEEDS"
-MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS")
+MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS"
+      --satellites "$SATELLITES")
 read -r -a ELL_LIST <<< "$ELLS"
 PK=(--los "$LOS" --meshsize "$MESHSIZE" --ells "${ELL_LIST[@]}" --k-step "$K_STEP")
 if [ -z "$MARK_RCUT" ] || [ -z "$MARK_COEFFICIENTS" ]; then
@@ -86,6 +94,7 @@ hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
 echo "HOD:            $TRACER from $HOD_PARAM_FILE, seeds $SEEDS, $NTHREADS threads"
+echo "Satellites:     $SATELLITES"
 echo "P(k):           redshift space along $LOS, mesh ${MESHSIZE}^3, ells $ELLS, k-step $K_STEP (jaxpower, TSC, interlacing 3)"
 echo "Marked P(k):    mark sum_n c_n delta_R^n, R = $MARK_RCUT Mpc/h, coefficients $MARK_COEFFICIENTS"
 echo "Output names:   ${NAME}_PS.txt and ${NAME}_MPS.txt for each seed"

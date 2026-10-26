@@ -14,6 +14,10 @@ Output: halo_catalog/hod_dev-v2/<name>_PS.txt (+ .h5, .txt.json) in the run fold
         as acm), mark m = sum_n c_n delta_R^n with --mark-rcut R and --mark-coefficients c_0 c_1 ...;
         the .h5 has the mark's m_bar, m_min, m_max as attributes, as in acm.
 
+Satellites (--satellites): on random member particles of their halo (halos200c_particles.npy,
+written by jobs/halo_finder.sh with PARTICLE_FRACTION > 0; halos with fewer stored particles than
+satellites place the rest on the NFW profile), or on HODDIES' NFW profile, as in jobs/hod_fit.sh.
+
 HODDIES: the clone next to this repository (branch hicola-dev-v2 of the fork, based on the
 upstream dev-v2), whose commit is printed and saved in the metadata.
 The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
@@ -27,7 +31,7 @@ Redshift-space positions: x_los + v_los / (a H(z)), with H(z) from the run's cos
     python scripts/run_hod_mock.py --target Abacus_Small --model LCDM --realization s1234 \\
         --redshift 0.5 --boxsize 500 --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 \\
         --tcmb 2.726 --neff 3.046 --hod-param-file Notebooks/HOD_parameter_file_z0.500.yaml \\
-        --tracer LRG --seeds 42 43 44 --nthreads 32 --name "LRG_seed{seed}" \\
+        --tracer LRG --seeds 42 43 44 --nthreads 32 --name "LRG_seed{seed}" --satellites particles \\
         --los z --meshsize 512 --ells 0 2 4 --k-step 0.001 --mark-rcut 10 --mark-coefficients 1 -0.5
 """
 from __future__ import annotations
@@ -81,6 +85,8 @@ def parse_args() -> argparse.Namespace:
     hod.add_argument("--tracer", required=True, help="tracer of the parameter file, e.g. LRG")
     hod.add_argument("--seeds", type=int, nargs="+", required=True, help="one mock and P(k) per seed")
     hod.add_argument("--nthreads", type=int, required=True, help="HODDIES threads (the mock depends on it)")
+    hod.add_argument("--satellites", required=True, choices=["particles", "nfw"],
+                     help="satellites on member particles (halos200c_particles.npy) or on HODDIES' NFW profile")
     hod.add_argument("--name", required=True,
                      help="output name with {seed}, e.g. LRG_seed{seed} -> hod/LRG_seed42_PS.txt")
     pk = parser.add_argument_group("power spectrum")
@@ -98,6 +104,8 @@ def parse_args() -> argparse.Namespace:
 
     if "{seed}" not in args.name:
         raise SystemExit(f"--name must contain {{seed}} so that every seed has its own file, got {args.name!r}")
+    if not args.hod_param_file.is_file():
+        raise SystemExit(f"No HOD parameter file {args.hod_param_file}")
     if len(set(args.seeds)) != len(args.seeds):
         raise SystemExit(f"--seeds has duplicates: {args.seeds}")
     run = (args.target, args.model, args.realization, args.redshift)
@@ -128,16 +136,28 @@ def main() -> int:
     if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
         raise SystemExit(f"--boxsize {args.boxsize} differs from the halo catalog's {metadata['boxsize']}")
     print(f"Halos:          {args.halo_array} ({len(halos):,} halos)")
+    particles = None
+    if args.satellites == "particles":
+        particle_file = hp.particles_file(args.target, args.model, args.realization, args.redshift)
+        if not particle_file.exists():
+            raise SystemExit(f"No member particles {particle_file}: run jobs/halo_finder.sh with PARTICLE_FRACTION > 0")
+        particles = np.load(particle_file)
+        particle_info = json.loads(Path(str(particle_file) + ".json").read_text())
+        print(f"Satellites:     particles, {particle_file} ({len(particles):,} particles, "
+              f"fraction {particle_info['particle_fraction']})")
+    else:
+        print("Satellites:     nfw")
 
     e_z = efunc(args)
     print(f"Seeds:          {args.seeds} ({len(args.seeds)} mocks)")
     for seed in args.seeds:
         print(f"---------------- seed {seed}", flush=True)
-        measure_seed(hoddies, halos, seed, e_z, catalog_file, args)
+        measure_seed(hoddies, halos, particles, seed, e_z, catalog_file, args)
     return 0
 
 
-def measure_seed(hoddies: dict, halos: np.ndarray, seed: int, e_z: float, catalog_file: Path, args: argparse.Namespace) -> None:
+def measure_seed(hoddies: dict, halos: np.ndarray, particles, seed: int, e_z: float, catalog_file: Path,
+                 args: argparse.Namespace) -> None:
     """One HOD mock with this seed, its redshift-space P(k) and marked P(k) multipoles, written to
     hod_dev-v2/<name>_PS.txt and hod_dev-v2/<name>_MPS.txt."""
     name = args.name.format(seed=seed)
@@ -146,9 +166,13 @@ def measure_seed(hoddies: dict, halos: np.ndarray, seed: int, e_z: float, catalo
     marked_output = hp.hod_spectrum_file(*run, "MPS")
     base_catalog = hoddies["Base_catalogue"](
         {column: halos[column].copy() for column in halos.dtype.names},  # a dict: a structured array is refused
+        particle_data=None if particles is None else {column: particles[column].copy() for column in particles.dtype.names},
         boxsize=args.boxsize, z_simu=args.redshift, nthreads=args.nthreads,
     )
-    hod = hoddies["HOD"](base_catalog, param_file=str(args.hod_param_file), nthreads=args.nthreads, seed=seed)
+    hod = hoddies["HOD"](base_catalog, param_file=str(args.hod_param_file), nthreads=args.nthreads, seed=seed,
+                           use_particles=particles is not None)
+    if (particles is not None) != (hod.args["use_particles"] and hod.part_subsamples is not None):
+        raise SystemExit("HODDIES' use of the particles differs from --satellites")
     if hod.nthreads != args.nthreads:
         raise SystemExit(f"HODDIES uses {hod.nthreads} threads instead of --nthreads {args.nthreads} (it is capped by "
                          f"numba's thread count, NUMBA_NUM_THREADS); the mock depends on it")
@@ -177,6 +201,7 @@ def measure_seed(hoddies: dict, halos: np.ndarray, seed: int, e_z: float, catalo
         "halo_catalog": str(catalog_file),
         "hod_param_file": str(args.hod_param_file),
         "tracer": args.tracer,
+        "satellites": args.satellites,
         "hod_parameters": hod_parameters,
         "seed": seed,
         "nthreads": args.nthreads,
