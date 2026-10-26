@@ -15,7 +15,7 @@ Hi-COLA itself (`HiCOLA/`) keeps its original layout and file names. What was ad
 `hicola_data/` (reference data, kept results) and on scratch (simulation outputs).
 
 **HODDIES version**: the HOD parts use HODDIES **dev-v2**, through the fork `BielThi/HODDIES`,
-branch `hicola-dev-v2` (the upstream `dev-v2` plus a few fixes, section 4), checked out next to
+branch `main` (the upstream `dev-v2` plus a few fixes, section 4), checked out next to
 this repository.
 
 Contents: 1 quick start · 2 design rules · 3 where things live · 4 software setup · 5 runs and
@@ -120,10 +120,10 @@ and Lua from the active env (`$(CONDA_PREFIX)`) and FML from the clone it is in,
 clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL, Lua) are
 the `USE_*` lines at the top of the Makefile.
 
-**HODDIES**: the fork `github.com/BielThi/HODDIES`, branch `hicola-dev-v2`, checked out next to
+**HODDIES**: the fork `github.com/BielThi/HODDIES`, branch `main`, checked out next to
 this repository (`~/HODDIES`). The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
-from the `HODDIES` package installed in the env, which is a different copy. `hicola-dev-v2` is
-the upstream branch `dev-v2` (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus
+from the `HODDIES` package installed in the env, which is a different copy. Its `main` is
+the upstream branch `dev-v2` (tag `upstream-base` = the upstream commit it starts from) (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus
 fixes: the merge conflict left in the imports of `hod.py` resolved, `torch` imported only
 by the emulator functions that use it (the env has no torch), positions wrapped into the box
 without float32 round-off (`utils.wrap_box`), NFW-fallback satellites of `use_particles` placed
@@ -136,9 +136,10 @@ HOD_obj = HOD(base_catalog, param_file=PARAM_FILE)   # the HOD job also passes n
 HOD_obj.cosmo = cosmology                           # for the RSD of get_wp / get_xiells
 ```
 (the halo array is passed as a dict: a structured array is refused). The mock of a seed depends
-on the HODDIES version: mocks made with the fork's old `main` (commit `2572a69`, numba
+on the HODDIES version: mocks made with the old HODDIES of the fork (tag `old-pipeline`, numba
 parallelism off) differ from dev-v2 ones and must not be mixed; the HOD jobs record the HODDIES
-branch and commit in each output's `.json`. The fork's `main` is that old version.
+branch and commit in each output's `.json` (outputs made before 2026-10-26 name the branch
+`hicola-dev-v2`, since merged into the fork's `main`).
 
 **hi_class**: the env on jed has a `classy` built from `~/hi_class_public`
 (`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline uses it any more
@@ -468,7 +469,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
 ## 11. Setting up on another machine
 
-1. Clone `BielThi/Hi-COLA` (branch `main`) and `BielThi/HODDIES` (branch `hicola-dev-v2`) into the same folder, copy `hicola_data/`
+1. Clone `BielThi/Hi-COLA` (branch `main`) and `BielThi/HODDIES` (branch `main`) into the same folder, copy `hicola_data/`
    next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` conda env (section 4), build `nbody` with it activated, run
    `nbstripout --install` in the clone.
@@ -572,7 +573,9 @@ multipoles, HODDIES clustering with RSD) should be redone after rerunning the ha
 HODDIES dev-v2 (2026-10-26): the pipeline was developed on the branch `hicola-dev-v2` (next to
 `main`, with its outputs labelled `dev-v2`) and merged into `main`, without the label. The HOD
 results of the old pipeline (old HODDIES, physical `Rh`, NFW satellites) are archived in
-`hicola_data/archive/main_2026-10/`; `5fd193f` is the last commit of that pipeline.
+`hicola_data/archive/main_2026-10/`; `5fd193f` is the last commit of that pipeline. In the HODDIES
+fork, `hicola-dev-v2` became `main` (merged so that its content is kept as is); the old `main`
+is the tag `old-pipeline`.
 
 Fixed during the reorganisation: the `_a`/`_ma` Bart runs (`LCDM_Bart_a/_ma`) wrote to the
 same output folder as `LCDM_Bart`, and the nDGP `_a/_ma` Bart runs used seed 4321 and
