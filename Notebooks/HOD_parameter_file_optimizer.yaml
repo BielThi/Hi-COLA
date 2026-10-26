@@ -10,7 +10,7 @@ LRG: # Name of tracer 1
 
   # Parameters for the central HOD model
   HOD_model: SHOD  # Central galaxy HOD model. Choices: SHOD, GHOD, SFHOD, HMQ, mHMQ, LNHOD.
-  Ac: 0.92  # Normalization amplitude for central distribution
+  Ac: 1  # Normalization amplitude for central distribution
   log_Mcent: 12.89  # Central galaxy cutoff mass (log scale) or mean value if gausaain distribution
   sigma_M: 0.27  # Width of central galaxy mass distribution or stepness of the step function. 
 

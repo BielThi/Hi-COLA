@@ -18,7 +18,7 @@
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation, relative to the Hi-COLA folder (or absolute)
-RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_s1234.lua"
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
 # Output redshift of the snapshot (its halo catalog must exist: jobs/halo_finder.sh)
 REDSHIFT="0.500"
 
@@ -27,7 +27,7 @@ REDSHIFT="0.500"
 # or any parameter file, e.g. Notebooks/HOD_parameter_file_z0.500.yaml. The same file for every model
 # compared (e.g. the fit on LCDM for both LCDM and nDGP). If it sets the tracer's `density` (the
 # fits do), HODDIES rescales Ac to reach it, in each model.
-HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD-dev-v2_fit_LRG_SHOD_6p_ptcl/best_fit.yaml"
+HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD-dev-v2_fit_LRG_SHOD_6p_ptcl_r1-max/best_fit.yaml"
 TRACER="LRG"
 # Satellites: "particles" (random member particles of the halo: jobs/halo_finder.sh with PARTICLE_FRACTION > 0)
 # or "nfw" (HODDIES' NFW profile); as in the fit (its best_fit.yaml says which)
@@ -43,12 +43,12 @@ K_STEP="0.001"   # k-bin width [h/Mpc]
 
 # Marked power spectrum (same settings as the P(k) above): mark m = sum_n c_n delta_R^n, with delta_R
 # the galaxy density contrast smoothed by a Gaussian of radius R, normalised by its mean over the galaxies
-MARK_RCUT=""            # R [Mpc/h], e.g. "10"
-MARK_COEFFICIENTS=""    # c_0 c_1 c_2 ..., e.g. "1 -0.5"
+MARK_RCUT="25"          # R [Mpc/h], e.g. "10"
+MARK_COEFFICIENTS="1 -1"  # c_0 c_1 c_2 ..., e.g. "1 -0.5"
 
 # Output: halo_catalog/hod_dev-v2/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed;
 # name it after the HOD used (e.g. the fit name) so that mocks of different HODs stay apart (name in marked.ipynb)
-NAME="LRG_SHOD_6p_ptcl_seed{seed}"
+NAME="LRG_SHOD_6p_ptcl_r1-max_seed{seed}"
 # -------------------------------------------------------------------------
 # Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.
 

@@ -61,7 +61,7 @@ CORRELATION_STATISTICS="wp xi_ells"
 # Fit range [Mpc/h], the same for rp and s: only the bins (of the ranges above) entirely between
 # FIT_R_MIN and FIT_R_MAX are fitted, e.g. "1e-1" and "1e1"; "None" = no limit on that side. With a
 # limit the results are named ..._r<min>-<max> (e.g. _r0.1-10, _rmin-10), without one as usual.
-FIT_R_MIN="None"
+FIT_R_MIN="1.0"
 FIT_R_MAX="None"
 
 # Model: line of sight of the redshift-space distortions (box axis); HOD seed of every mock of the
