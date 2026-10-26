@@ -9,11 +9,12 @@ Data:   wp(rp) and/or the multipoles xi_ell(s) of pycorr two-point estimators (e
         Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks)
         covering the statistics --correlation-statistics (its blocks of the fitted ones are
         used), or diagonal ("none").
-Model:  HODDIES mocks on the halos of jobs/halo_finder_particles.sh (halos200c_ptcl_hoddies.npy,
-        Rh comoving), all with the same seed, measured with the bins of the data (pycorr, redshift
+Model:  HODDIES mocks on the run's halos (jobs/halo_finder.sh: halos200c_hoddies_dev-v2.npy, Rh
+        comoving), all with the same seed, measured with the bins of the data (pycorr, redshift
         space along the line of sight with H(z) of the run's cosmology); chi2 as HODDIES'
         func_stochopy. Satellites (--satellites):
-          particles  a random member particle of the halo (halos200c_ptcl_particles.npy), velocity
+          particles  a random member particle of the halo (halos200c_particles.npy, written by
+                     jobs/halo_finder.sh with PARTICLE_FRACTION > 0), velocity
                      v_halo + f_sigv (v_particle - v_halo); halos with fewer stored particles than
                      satellites place the rest on the NFW profile (fraction recorded)
           nfw        HODDIES' NFW profile (Rh, concentration c), velocity dispersion from Vrms x f_sigv
@@ -421,10 +422,10 @@ def main() -> int:
 
     run = (args.target, args.model, args.realization, args.redshift)
     hoddies = import_hoddies()
-    # Halos (and member particles) of jobs/halo_finder_particles.sh, for both kinds of satellites
-    halo_array = hp.ptcl_hoddies_file(*run)
-    catalog_file = hp.ptcl_halo_catalog_file(*run)
-    particle_file = hp.ptcl_particles_file(*run) if args.satellites == "particles" else None
+    # Halos (and member particles) of jobs/halo_finder.sh
+    halo_array = hp.hoddies_catalog_file(*run)
+    catalog_file = hp.halo_catalog_file(*run)
+    particle_file = hp.particles_file(*run) if args.satellites == "particles" else None
 
     # Checks, data and output folder on rank 0, then shared
     problem, data = None, None
@@ -432,7 +433,8 @@ def main() -> int:
         try:
             missing = [f for f in (halo_array, particle_file) if f is not None and not f.exists()]
             if missing:
-                raise SystemExit(f"Missing {', '.join(map(str, missing))}: run jobs/halo_finder_particles.sh on this run and redshift")
+                raise SystemExit(f"Missing {', '.join(map(str, missing))}: run jobs/halo_finder.sh on this run and redshift"
+                                 + (" with PARTICLE_FRACTION > 0" if particle_file is not None else ""))
             metadata = load_catalog_metadata(catalog_file)
             require_peculiar_velocities(metadata, catalog_file)
             if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):

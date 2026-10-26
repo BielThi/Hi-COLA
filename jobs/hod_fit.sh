@@ -12,8 +12,8 @@
 #SBATCH --partition=academic
 # Fit of the HOD parameters on the halos of one snapshot of a Hi-COLA run to measured clustering
 # (wp and/or xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py). Uses the
-# halos and member particles of jobs/halo_finder_particles.sh (halo_catalog/halos200c_ptcl_*.npy),
-# for both kinds of satellites.
+# halos of jobs/halo_finder.sh (halos200c_hoddies_dev-v2.npy) and, for SATELLITES="particles", its
+# member particles (halos200c_particles.npy, PARTICLE_FRACTION > 0 in the halo finder).
 # Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<name>/,
 # named after what is fitted: <tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>], the
 # statistics only when not all of wp + xi_0 + xi_2, e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp. A new
@@ -24,7 +24,7 @@
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation, relative to the Hi-COLA folder (or absolute), and the snapshot
-# (its halos and particles must exist: jobs/halo_finder_particles.sh)
+# (its halos, and particles for SATELLITES="particles", must exist: jobs/halo_finder.sh)
 RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
 REDSHIFT="0.500"
 

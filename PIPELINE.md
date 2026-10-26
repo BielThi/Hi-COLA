@@ -23,10 +23,13 @@ Hi-COLA itself (`HiCOLA/`) keeps its original layout and file names. What was ad
 ~/hicola_data                     ~/dev-v2/hicola_data -> ~/hicola_data
 ```
 
-Both share the run files, the simulations on scratch, the halo catalogs and `hicola_data`. Only
-the HOD outputs are kept apart, because the mocks differ between HODDIES versions:
-`halo_catalog/hod_dev-v2/` and `..._HOD-dev-v2_<name>_...` here, `halo_catalog/hod/` and
-`..._HOD_<name>_...` on `main` (`HOD_LABEL` in `scripts/hicola_paths.py`). Each clone has its own
+Both share the run files, the simulations on scratch, the halo catalogs and `hicola_data`. Kept
+apart (`HOD_LABEL` in `scripts/hicola_paths.py`): the HOD outputs, because the mocks differ between
+HODDIES versions (`halo_catalog/hod_dev-v2/` and `..._HOD-dev-v2_<name>_...` here, `halo_catalog/hod/`
+and `..._HOD_<name>_...` on `main`), and the HODDIES halo array (`halos200c_hoddies_dev-v2.npy` here,
+with comoving radii; `halos200c_hoddies.npy` on `main`, physical). The halo finder of this branch
+rewrites the shared halo catalog and HMF (the same FoF, same content) and can add
+`halos200c_particles.npy`, which only this branch uses. Each clone has its own
 `nbody` build, frontend tables (`HiCOLA/Output/`) and job logs. Submit the jobs of this pipeline
 from `~/dev-v2/Hi-COLA/jobs/`.
 
@@ -221,7 +224,9 @@ snapshot_<simulation_name>_z<z>/           one per output redshift
 └── halo_catalog/                          written by the halo finder
     ├── halos200c_catalog.npy (+ .json)    FoF halos with M200c (section 8)
     ├── halos200c_hmf.txt (+ .json)        HMF: this is the "HMF" that is kept
-    └── halos200c_hoddies.npy (+ .json)    the same halos in HODDIES' format
+    ├── halos200c_hoddies_dev-v2.npy (+ .json)  the same halos in HODDIES' format (Rh comoving)
+    ├── halos200c_particles.npy (+ .json)  member particles, with PARTICLE_FRACTION > 0
+    └── halos200c_hoddies.npy (+ .json)    HODDIES array of the main branch (Rh physical)
 ```
 
 ## 6. Running jobs
@@ -235,10 +240,9 @@ on the command line.
 | script | parameters | resources (default) | run with |
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
-| `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
+| `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
-| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_ROWS`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
-| `hod_fit_wp.sh` | the same fit on wp only (no xi_ell settings; `CORRELATION_ROWS="0:17"`, the wp block of `M_corr_lrg_z0.5.txt`); separate copy of `hod_fit.sh` for now | as `hod_fit.sh` | `sbatch jobs/hod_fit_wp.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -345,8 +349,17 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   `velocity_definition` were made before this fix (2026-10-14) and have velocities too large by
   √(1+z): the halo outputs, the HOD-mock job and the HOD/LRG notebooks refuse them; rerun the
   halo finder.
-- **HODDIES array** `halos200c_hoddies.npy`: `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id`
-  (peculiar velocities).
+- **HODDIES array** `halos200c_hoddies_dev-v2.npy` (`scripts/run_halo_outputs.py`):
+  `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id` (peculiar velocities), with `Rh`, `Rs` in
+  **comoving** kpc/h: nbodykit's `r200c` is physical, HODDIES places satellites in comoving units
+  (like Abacus' comoving `r98`), so `Rh = r200c (1+z)`. The main branch's `halos200c_hoddies.npy`
+  keeps the physical radii (its satellites are 1+z too close to their halo's centre).
+- **Member particles** `halos200c_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
+  a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
+  halo, `x y z` [Mpc/h], `vx vy vz` [peculiar km/s], `halo_id` = row of the halo catalog of the same
+  FoF (= FoF label − 1; checked against the halo masses). A halo finder run without particles
+  removes an older particle file (its halo_id would not match). For the HOD fits with
+  `SATELLITES="particles"`.
 - **HOD galaxy P(k)** `halo_catalog/hod_dev-v2/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
   `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_<name>_PS.txt`: the
   redshift-space power spectrum multipoles of a HODDIES mock (one file per seed), columns k [h/Mpc], N_modes,
@@ -363,9 +376,16 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 - **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<name>/`
   (`jobs/hod_fit.sh`, `scripts/run_hod_fit.py`, `hp.hod_fit_dir`; shown by `HOD_fit_results.ipynb`,
   read with `an.load_hod_fit`), written there directly (not on scratch). The name says what is
-  fitted: HODDIES' fit model name and the statistics, `<tracer>_<HOD model>_<n free>p_<statistics>`,
-  e.g. `LRG_SHOD_6p_wp+xi02`; a new fit of the same thing replaces the folder (the settings of each
-  fit are in its `settings.json`):
+  fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>]` (HODDIES' fit model name, the
+  satellites, and the statistics only when not all of wp + xi_0 + xi_2), e.g. `LRG_SHOD_6p_ptcl`,
+  `LRG_SHOD_6p_nfw`, `LRG_SHOD_6p_ptcl_wp`; a new fit of the same thing replaces the folder (the
+  settings of each fit are in its `settings.json`). Satellites (`SATELLITES`): `particles` = a
+  random member particle of the halo (`halos200c_particles.npy`), velocity
+  v_halo + f_sigv (v_particle − v_halo), the NFW profile for the satellites beyond the stored
+  particles of their halo (fraction in `best_fit.json`, `sat_nfw_fraction`); `nfw` = HODDIES' NFW
+  profile (Rh, c), velocity dispersion Vrms f_sigv. `CORRELATION_STATISTICS` says what the
+  correlation matrix covers (wp, then xi_ell per ell, with the bins of the data); the blocks of the
+  fitted statistics are used. Files:
   `settings.json` (all settings of the job, run, H(z), code versions, job log), a copy of the HOD
   parameter file, `data.npz` (the fitted data: separations, values, errors, data vector, covariance,
   bin edges), `evaluations/rank_<k>.txt` (every evaluation of rank k: parameters, chi2, galaxies,
@@ -415,7 +435,6 @@ imports:
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
 | `HOD_fit.ipynb` | exploration of HOD fitting with HODDIES (the fits themselves: `jobs/hod_fit.sh`) | target, model, realization, redshift, parameter file, tracer, nthreads, seed |
 | `HOD_fit_results.ipynb` | results of a fit of `jobs/hod_fit.sh` (also while it runs): settings, best-fit parameters against priors, chi2 (total, per block, other seeds), data vs best-fit and reference-HOD models with residuals, convergence, parameters of every evaluation, HOD occupation | target, model, realization, redshift, fit name (printed by the job) |
-| `HOD_fit_wp_results.ipynb` | the same for the wp-only fits of `hod_fit_wp.sh` (separate copy for now) | target, model, realization, redshift, fit name (e.g. `LRG_SHOD_6p_wp`) |
 | `frontend.ipynb` | plots of the frontend tables in `HiCOLA/Output/` | table names |
 | `scan.ipynb` | scan of the nDGP frontend parameters | template `Frontend_parameter_files/nDGP_scan/nDGP_scan.ini` |
 | `halos.ipynb`, `overdensity.ipynb` | older analyses kept as starting points; they point to runs that no longer exist | — |
@@ -510,7 +529,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 | `--mass-grid reference: there is no reference HMF` | `HMF_MASS_GRID="reference"` for a target/redshift without reference HMF; use `MIN MAX N` |
 | sbatch: `exceeds MaxMemPerCPU` | more than 7000 MB per core requested; lower `--mem-per-cpu`/`--mem` or add cores |
 | notebook: "Skipping … No PS for …" | the run (or that redshift) doesn't exist on scratch nor in `hicola_data/hicola/` |
-| HOD notebook: missing `halos200c_hoddies.npy` | run the halo finder on that run and redshift (the run must still be on scratch) |
+| HOD notebook or job: missing `halos200c_hoddies_dev-v2.npy` (or `halos200c_particles.npy`) | run the halo finder of this branch on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
 | `CondaError: Run 'conda init'` | conda not found as a shell function; `jobs/hicola_env.sh` looks in `$CONDA_EXE`, the PATH, `~/miniconda3`, `~/anaconda3` |
 
 ## 14. Known issues
@@ -520,8 +539,15 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 - `Frontend_parameter_files/nDGP/nDGP.ini` does not run (`Hubble0 = '1.0/Hubble_dS'` is not a
   number). The nDGP tables used by `standalone/nDGP_action.lua` exist only in
   `HiCOLA/Output/` on jed.
-- The COLA_NM4096 reference HMF is spherical-overdensity with an unstated Δ; Hi-COLA HMFs are
-  FoF + M200c.
+- The COLA_NM4096 reference HMF is spherical-overdensity with an unstated Δ; Hi-COLA HMFs use
+  FoF masses (next item), so the two mass definitions differ.
+- **To correct later: "M200c" in the halo catalogs is the FoF mass.** `m200c` (and HODDIES `Mh`)
+  is `length` × particle mass (b = 0.2), not a spherical-overdensity M200c: nbodykit's
+  `to_halos(mdef='200c')` uses `mdef` only to derive `r200c` and `c` (Dutton & Macciò 2014
+  c(M)) from that mass. So the field names, the `"mdef": "200c"` metadata, the `halos200c_*`
+  file names and "M200c" in this file and `hicola_data/README.md` are misleading. FoF b = 0.2
+  masses are roughly M200m. Fix: rename/relabel (e.g. `m_fof`), or compute true SO masses
+  around the FoF centres; then revisit HMF comparisons with SO references.
 - Abacus_Small has no reference HMF yet.
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 

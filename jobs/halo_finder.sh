@@ -8,8 +8,10 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=4:30:00
 #SBATCH --partition=academic
-# FoF halo finding on one snapshot of a Hi-COLA run, then the HMF and the HODDIES halo array,
-# then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
+# FoF halo finding on one snapshot of a Hi-COLA run, then the HMF and the HODDIES halo array
+# (halos200c_hoddies_dev-v2.npy, Rh comoving), then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
+# With PARTICLE_FRACTION > 0 it also keeps a random subsample of the halo member particles
+# (halos200c_particles.npy, same halo_id as the catalog), for the HOD fits with SATELLITES="particles".
 #
 # Edit the parameters below, then submit it (from any folder):
 #   sbatch ~/Hi-COLA/jobs/halo_finder.sh          (or, from the Hi-COLA folder: sbatch jobs/halo_finder.sh)
@@ -25,6 +27,12 @@ REDSHIFT="0.500"
 LINKING_LENGTH="0.2"   # in units of the mean particle separation
 NMIN="50"              # minimum particles per halo; so far 30 for COLA_NM4096 runs, 50 for Abacus_Small runs
 MDEF="200c"            # mass definition; only 200c for now: the catalog fields (m200c, r200c) and files (halos200c_*) are named for it
+
+# Member particles kept for HODDIES' satellites on particles: random fraction of every halo's
+# particles ("0" = none) and the seed of the draw. 10% keeps ~100 particles in a 1e13 Msun/h halo
+# for 1024^3 particles in 500 Mpc/h (~1 GB for Abacus_Small).
+PARTICLE_FRACTION="0.1"
+PARTICLE_SEED="1"
 
 # HMF mass grid: "reference" = the masses of the target's reference HMF at this redshift, to
 # compare bin by bin (COLA_NM4096 only, so far); or "MIN MAX N" = N log-spaced masses in Msun/h
@@ -55,7 +63,8 @@ if [ "$TARGET" = standalone ]; then
     exit 1
 fi
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
-FOF=(--linking-length "$LINKING_LENGTH" --nmin "$NMIN" --mdef "$MDEF")
+FOF=(--linking-length "$LINKING_LENGTH" --nmin "$NMIN" --mdef "$MDEF"
+     --particle-fraction "$PARTICLE_FRACTION" --particle-seed "$PARTICLE_SEED")
 COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --omega-lambda "$COSMO_OMEGA_LAMBDA" --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF" --n-s "$COSMO_NS")
 read -r -a GRID <<< "$HMF_MASS_GRID"
@@ -64,6 +73,7 @@ hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
 echo "FoF:            linking length $LINKING_LENGTH, at least $NMIN particles, mass definition $MDEF"
+echo "Particles:      fraction $PARTICLE_FRACTION of the member particles kept (seed $PARTICLE_SEED)"
 echo "Halo masses:    computed with the run's cosmology (above)"
 PYTHONPATH="$HICOLA_ROOT/scripts" python - "$TARGET" "$REDSHIFT" "${GRID[@]}" <<'EOF'
 import sys

@@ -90,32 +90,29 @@ def halo_catalog_file(target: str, model: str, realization: str, redshift: float
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_catalog.npy"
 
 
+# Outputs of this branch (HODDIES dev-v2) are kept apart from those of the main branch (old HODDIES)
+# that share the run folders: HOD outputs in halo_catalog/hod_dev-v2/ and ..._HOD-dev-v2_<name>_...
+# (the mocks differ between versions), and the HODDIES halo array (Rh comoving here, physical on main).
+HOD_LABEL = "dev-v2"
+HODDIES_ARRAY_NAME = f"halos200c_hoddies_{HOD_LABEL}.npy"
+
+
 def hoddies_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hoddies.npy"
+    """HODDIES halo array of this branch (scripts/run_halo_outputs.py): Rh and Rs in comoving kpc/h."""
+    return halo_catalog_dir(target, model, realization, redshift) / HODDIES_ARRAY_NAME
+
+
+def particles_file(target: str, model: str, realization: str, redshift: float) -> Path:
+    """Random subsample of the FoF member particles (jobs/halo_finder.sh with PARTICLE_FRACTION > 0),
+    with the halo_id of the halo catalog."""
+    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_particles.npy"
 
 
 def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path:
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hmf.txt"
 
 
-# Tryout with member particles (jobs/halo_finder_particles.sh): a FoF run of its own, whose halo
-# catalog, HODDIES array and particle subsample share the same halo_id
-def ptcl_halo_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_catalog.npy"
-
-
-def ptcl_hoddies_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_hoddies.npy"
-
-
-def ptcl_particles_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_ptcl_particles.npy"
-
-
 HOD_STATISTICS = ("PS", "MPS")  # power spectrum, marked power spectrum
-# HOD outputs of this branch (HODDIES dev-v2) are kept apart from those of the main branch (old
-# HODDIES), which use halo_catalog/hod/ and ..._HOD_<name>_... : the mocks differ between versions.
-HOD_LABEL = "dev-v2"
 
 
 def _check_hod_statistic(statistic: str) -> None:

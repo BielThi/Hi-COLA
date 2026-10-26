@@ -88,7 +88,9 @@ def validate_halo_catalog(catalog: np.ndarray, *, boxsize: float | None = None) 
                 raise ValueError(f"{field} positions are outside [0, boxsize)")
 
 
-def halo_catalog_to_hoddies(catalog: np.ndarray) -> np.ndarray:
+def halo_catalog_to_hoddies(catalog: np.ndarray, redshift: float) -> np.ndarray:
+    """HODDIES halo array of a halo catalog. HODDIES places satellites in comoving coordinates (as with
+    Abacus' comoving r98), while nbodykit's r200c is physical: Rh and Rs are converted to comoving kpc/h."""
     require_fields(
         catalog,
         ["x", "y", "z", "vx", "vy", "vz", "m200c", "log10_m200c", "r200c", "rs", "c", "vrms", "halo_id"],
@@ -98,8 +100,8 @@ def halo_catalog_to_hoddies(catalog: np.ndarray) -> np.ndarray:
         arr[field] = catalog[field]
     arr["Mh"] = catalog["m200c"]
     arr["log10_Mh"] = catalog["log10_m200c"]
-    arr["Rh"] = catalog["r200c"]
-    arr["Rs"] = catalog["rs"]
+    arr["Rh"] = catalog["r200c"] * (1 + redshift)
+    arr["Rs"] = catalog["rs"] * (1 + redshift)
     arr["Vrms"] = catalog["vrms"]
     return arr
 

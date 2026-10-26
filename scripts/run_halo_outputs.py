@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
 
+The HODDIES array of this branch is halos200c_hoddies_dev-v2.npy, with Rh and Rs in comoving kpc/h
+(nbodykit's r200c is physical); the main branch's halos200c_hoddies.npy, physical, is not touched.
+
 The HMF mass grid is chosen with --mass-grid:
     reference        the masses of the target's reference HMF at the same redshift (Box1, LCDM),
                      so both can be compared bin by bin; fails if there is no reference HMF
@@ -27,7 +30,7 @@ from halo_pipeline import (
 
 
 def default_hoddies_output(halo_catalog: Path) -> Path:
-    return halo_catalog.with_name("halos200c_hoddies.npy")
+    return halo_catalog.with_name(hp.HODDIES_ARRAY_NAME)
 
 
 def default_hmf_output(halo_catalog: Path) -> Path:
@@ -73,7 +76,7 @@ def main() -> int:
     validate_halo_catalog(catalog, boxsize=args.boxsize)
 
     hoddies_output = args.hoddies_output or default_hoddies_output(args.halo_catalog)
-    hoddies = halo_catalog_to_hoddies(catalog)
+    hoddies = halo_catalog_to_hoddies(catalog, args.redshift)
     np.save(hoddies_output, hoddies)
     with open(str(hoddies_output) + ".json", "w", encoding="utf-8") as handle:
         json.dump(
@@ -82,7 +85,7 @@ def main() -> int:
                 "output": str(hoddies_output),
                 "schema": "HODDIES halo array",
                 "mass_units": "Msun/h",
-                "radius_units": "kpc/h",
+                "radius_units": "kpc/h comoving (nbodykit's physical r200c x (1+z))",
                 "position_units": "Mpc/h",
                 "velocity_units": "km/s",
                 "velocity_definition": VELOCITY_DEFINITION,

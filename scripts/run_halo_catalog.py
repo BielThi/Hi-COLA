@@ -16,6 +16,11 @@ unless --snapshot/--output are given.
 It writes one flat structured NumPy halo catalog. Downstream notebooks can use
 that catalog directly for HMFs, or convert it to HODDIES' expected field names
 when running HOD models.
+
+With --particle-fraction > 0 it also writes halos200c_particles.npy (+ .json): a random subsample of
+the member particles of every halo (x y z [Mpc/h], vx vy vz [peculiar km/s], halo_id), for HODDIES'
+satellites on particles. halo_id is the row of the halo catalog = FoF label - 1 (nbodykit numbers
+the groups by size and drops label 0, "no halo"); checked against the halo masses.
 """
 
 from __future__ import annotations
@@ -49,6 +54,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mdef", required=True, choices=["200c"],
                         help="mass definition; only 200c, the catalog fields and files are named for it")
     parser.add_argument("--particle-type", type=int, default=1, help="Gadget particle type of the dark matter")
+    parser.add_argument("--particle-fraction", type=float, required=True,
+                        help="fraction of the member particles kept (random, the same in every halo); 0 = none")
+    parser.add_argument("--particle-seed", type=int, required=True, help="seed of the particle subsampling")
     cosmo = parser.add_argument_group("cosmology (of the simulation, used for the halo masses)")
     cosmo.add_argument("--h", type=float, required=True)
     cosmo.add_argument("--omega-cdm", type=float, required=True)
@@ -60,10 +68,32 @@ def parse_args() -> argparse.Namespace:
     cosmo.add_argument("--n-s", type=float, required=True)
     args = parser.parse_args()
 
+    if not 0 <= args.particle_fraction <= 1:
+        raise SystemExit("--particle-fraction must be in [0, 1]")
     run = (args.target, args.model, args.realization, args.redshift)
     args.snapshot = args.snapshot or hp.snapshot_glob(*run)
     args.output = args.output or str(hp.halo_catalog_file(*run))
+    args.particles_output = os.path.join(os.path.dirname(args.output), hp.particles_file(*run).name)
     return args
+
+
+PARTICLE_DTYPE = [("x", "f4"), ("y", "f4"), ("z", "f4"), ("vx", "f4"), ("vy", "f4"), ("vz", "f4"), ("halo_id", "i8")]
+
+
+def local_member_particles(fof, source, fraction: float, seed: int, boxsize: float, comm: MPI.Comm) -> np.ndarray:
+    """Random subsample of this rank's particles that belong to a halo, with halo_id = FoF label - 1."""
+    labels = np.asarray(fof.labels)
+    rng = np.random.default_rng([seed, comm.rank])
+    keep = (labels > 0) & (rng.random(labels.size) < fraction)
+    position = np.asarray(source.compute(source["Position"]), dtype="f8")[keep] % boxsize
+    velocity = np.asarray(source.compute(source["Velocity"]), dtype="f8")[keep]
+    particles = np.empty(int(keep.sum()), dtype=PARTICLE_DTYPE)
+    particles["x"], particles["y"], particles["z"] = position.T
+    for axis in "xyz":  # float32 rounding can turn a position just below the box size into the box size
+        particles[axis][particles[axis] >= boxsize] = 0.0
+    particles["vx"], particles["vy"], particles["vz"] = velocity.T
+    particles["halo_id"] = labels[keep] - 1
+    return particles
 
 
 def run_cosmology(args: argparse.Namespace):
@@ -252,10 +282,38 @@ def main() -> int:
     log(comm, "Computing local halo fields")
     local_size = len(halos["Mass"].compute())
     local_vrms, local_length = compute_local_fof_stats(fof, gadget, local_size)
+    if not np.array_equal(local_length, np.rint(np.asarray(halos["Mass"].compute()) / particle_mass).astype("i8")):
+        raise SystemExit("The member counts per FoF label differ from nbodykit's halo masses: halo row != label - 1")
     local_arr = compute_local_halo_catalog_array(halos, local_vrms, local_length, args.boxsize)
     local_count = np.array(len(local_arr), dtype="i8")
     offsets = np.cumsum([0] + comm.allgather(int(local_count)))[:-1]
     local_arr["halo_id"] = np.arange(offsets[comm.rank], offsets[comm.rank] + len(local_arr), dtype="i8")
+
+    if args.particle_fraction > 0:
+        local_particles = local_member_particles(fof, gadget, args.particle_fraction, args.particle_seed, args.boxsize, comm)
+        n_members = comm.allreduce(int(np.sum(np.asarray(fof.labels) > 0)), op=MPI.SUM)
+        particle_parts = comm.gather(local_particles, root=0)
+        if comm.rank == 0:
+            particles = np.concatenate(particle_parts)
+            del particle_parts
+            np.save(args.particles_output, particles)
+            with open(args.particles_output + ".json", "w", encoding="utf-8") as handle:
+                json.dump({
+                    "output": args.particles_output, "halo_catalog": args.output, "snapshot": args.snapshot,
+                    "schema": "member particles", "fields": list(particles.dtype.names),
+                    "particle_fraction": args.particle_fraction, "particle_seed": args.particle_seed,
+                    "subsampling": "random per particle, seed (particle_seed, MPI rank)", "mpi_ranks": comm.size,
+                    "particles": int(len(particles)), "member_particles": n_members,
+                    "halo_id": "row of the halo catalog = FoF label - 1", "position_units": "Mpc/h",
+                    "velocity_units": "km/s", "velocity_definition": VELOCITY_DEFINITION,
+                }, handle, indent=2, sort_keys=True)
+            log(comm, f"Saved {len(particles):,} member particles ({len(particles) / n_members:.4f} of {n_members:,}) "
+                      f"to {args.particles_output}")
+    elif comm.rank == 0 and os.path.exists(args.particles_output):
+        os.remove(args.particles_output)  # from an earlier FoF: its halo_id would not match this catalog
+        if os.path.exists(args.particles_output + ".json"):
+            os.remove(args.particles_output + ".json")
+        log(comm, f"Removed the member particles of an earlier FoF: {args.particles_output}")
 
     gathered = comm.gather(local_arr, root=0)
     if comm.rank == 0:
@@ -290,6 +348,8 @@ def main() -> int:
             "velocity_definition": VELOCITY_DEFINITION,
             "vrms_definition": "sqrt(sum_i(<v_i^2> - <v_i>^2)) over FOF member particles",
             "mpi_ranks": comm.size,
+            "particle_fraction": args.particle_fraction,
+            "particles_output": args.particles_output if args.particle_fraction > 0 else None,
             "halos": int(len(arr)),
             "fields": list(arr.dtype.names),
         }
