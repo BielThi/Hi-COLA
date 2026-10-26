@@ -22,15 +22,15 @@ RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234
 # Output redshift of the snapshot (its halo catalog must exist: jobs/halo_finder.sh)
 REDSHIFT="0.500"
 
-# HODDIES parameter file (relative to the Hi-COLA folder, or absolute) and the tracer of it to populate:
-# the best_fit.yaml of a fit (jobs/hod_fit.sh, path printed at the end of its log, line 'For the mocks:'),
-# or any parameter file, e.g. Notebooks/HOD_parameter_file_z0.500.yaml. The same file for every model
-# compared (e.g. the fit on LCDM for both LCDM and nDGP). If it sets the tracer's `density` (the
-# fits do), HODDIES rescales Ac to reach it, in each model.
-HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD_fit_LRG_SHOD_6p_ptcl_r1-max/best_fit.yaml"
-TRACER="LRG"
+# HOD: the best fit of a fit of jobs/hod_fit.sh (its name, line 'Fit:' of its log), made on the run of
+# HOD_FIT_MODEL at the same target, realization and redshift: "own" = this run's model (each model
+# with its own fit), or a model, e.g. "LCDM" (the LCDM fit for every model). The fits fix the galaxy
+# density: HODDIES rescales Ac to reach it.
+HOD_FIT="LRG_SHOD_6p_ptcl_r1-max"
+HOD_FIT_MODEL="own"
+TRACER="LRG"       # tracer of the fit
 # Satellites: "particles" (random member particles of the halo: jobs/halo_finder.sh with PARTICLE_FRACTION > 0)
-# or "nfw" (HODDIES' NFW profile); as in the fit (its best_fit.yaml says which)
+# or "nfw" (HODDIES' NFW profile); must be those of the fit
 SATELLITES="particles"
 SEEDS="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20"      # HOD seeds, one mock, P(k) and marked P(k) each, e.g. "1 2 3 4 5"; ~1.5 min per seed at mesh 512 (raise --time above for more than ~35 seeds)
 NTHREADS="32"   # HODDIES threads; the mock of a seed depends on it: keep it fixed across seeds
@@ -46,9 +46,7 @@ K_STEP="0.001"   # k-bin width [h/Mpc]
 MARK_RCUT="25"          # R [Mpc/h], e.g. "10"
 MARK_COEFFICIENTS="1 -1"  # c_0 c_1 c_2 ..., e.g. "1 -0.5"
 
-# Output: halo_catalog/hod/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed;
-# name it after the HOD used (e.g. the fit name) so that mocks of different HODs stay apart (name in marked.ipynb)
-NAME="LRG_SHOD_6p_ptcl_r1-max_seed{seed}"
+# Output: halo_catalog/hod/<HOD_FIT>_fit-<model of the fit>_seed<seed>_PS.txt and _MPS.txt in the run folder
 # -------------------------------------------------------------------------
 # Box size and cosmology (for H(z) in the redshift-space shift) are taken from the run file.
 
@@ -68,18 +66,19 @@ fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")
-HOD_PARAM_FILE=$(readlink -f "$HOD_PARAM_FILE")
 
 hicola_load_run "$RUN_FILE"
 if [ "$TARGET" = standalone ]; then
     echo "The HOD mock needs a run matched to a reference simulation, not $RUN_LABEL" >&2
     exit 1
 fi
+FIT_MODEL=$([ "$HOD_FIT_MODEL" = own ] && echo "$MODEL" || echo "$HOD_FIT_MODEL")
+NAME="${HOD_FIT}_fit-${FIT_MODEL}_seed{seed}"
 RUN=(--target "$TARGET" --model "$MODEL" --realization "$REALIZATION" --redshift "$REDSHIFT" --boxsize "$BOXSIZE")
 COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEGA_B" --omega-mnu "$COSMO_OMEGA_MNU"
            --tcmb "$COSMO_TCMB" --neff "$COSMO_NEFF")
 read -r -a SEED_LIST <<< "$SEEDS"
-MOCK=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS"
+MOCK=(--hod-fit "$HOD_FIT" --hod-fit-model "$FIT_MODEL" --tracer "$TRACER" --seeds "${SEED_LIST[@]}" --name "$NAME" --nthreads "$NTHREADS"
       --satellites "$SATELLITES")
 read -r -a ELL_LIST <<< "$ELLS"
 PK=(--los "$LOS" --meshsize "$MESHSIZE" --ells "${ELL_LIST[@]}" --k-step "$K_STEP")
@@ -93,7 +92,7 @@ MARK=(--mark-rcut "$MARK_RCUT" --mark-coefficients "${MARK_COEFFICIENT_LIST[@]}"
 hicola_print_env
 hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
-echo "HOD:            $TRACER from $HOD_PARAM_FILE, seeds $SEEDS, $NTHREADS threads"
+echo "HOD:            $TRACER, best fit of $HOD_FIT on $FIT_MODEL, seeds $SEEDS, $NTHREADS threads"
 echo "Satellites:     $SATELLITES"
 echo "P(k):           redshift space along $LOS, mesh ${MESHSIZE}^3, ells $ELLS, k-step $K_STEP (jaxpower, TSC, interlacing 3)"
 echo "Marked P(k):    mark sum_n c_n delta_R^n, R = $MARK_RCUT Mpc/h, coefficients $MARK_COEFFICIENTS"

@@ -5,7 +5,8 @@ and marked P(k).
 Input:  halo_catalog/halos200c_hoddies.npy of the run (written by jobs/halo_finder.sh), with
         peculiar velocities (catalogs made before the velocity fix of 2026-10-14 are refused).
 Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one per seed
-        (--name contains {seed}, e.g. LRG_seed{seed} -> LRG_seed42_PS.txt): the power spectrum
+        (--name contains {seed}, e.g. LRG_seed{seed} -> LRG_seed42_PS.txt; jobs/hod_mock.sh
+        names them <fit>_fit-<model of the fit>_seed{seed}): the power spectrum
         multipoles of the mock in redshift space, measured as in the EMC/acm pipeline
         (galaxy_power_spectrum.py): columns k [h/Mpc], N_modes, P_ell [(Mpc/h)^3] shot-noise
         subtracted; the .h5 is jaxpower's own format, the same as the EMC measurements.
@@ -19,7 +20,8 @@ written by jobs/halo_finder.sh with PARTICLE_FRACTION > 0; halos with fewer stor
 satellites place the rest on the NFW profile), or on HODDIES' NFW profile, as in jobs/hod_fit.sh.
 
 HODDIES: the clone next to this repository (version: PIPELINE.md, section 4), whose commit is printed and saved in the metadata.
-The HOD model and its parameters come from the HODDIES parameter file. If it sets the tracer's
+The HOD model and its parameters come from the best_fit.yaml of a fit (jobs/hod_fit.sh) of the run
+itself or of another model (--hod-fit, --hod-fit-model). If it sets the tracer's
 `density`, HODDIES rescales Ac (and the satellites with it) to reach that number density; if
 that needs Ac > 1, it keeps Ac and warns (the density is then not reached).
 The mock depends on the seed and on the number of threads (HODDIES seeds each block of halos).
@@ -29,8 +31,9 @@ Redshift-space positions: x_los + v_los / (a H(z)), with H(z) from the run's cos
 
     python scripts/run_hod_mock.py --target Abacus_Small --model LCDM --realization s1234 \\
         --redshift 0.5 --boxsize 500 --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 \\
-        --tcmb 2.726 --neff 3.046 --hod-param-file Notebooks/HOD_parameter_file_z0.500.yaml \\
-        --tracer LRG --seeds 42 43 44 --nthreads 32 --name "LRG_seed{seed}" --satellites particles \\
+        --tcmb 2.726 --neff 3.046 --hod-fit LRG_SHOD_6p_ptcl --hod-fit-model LCDM \\
+        --tracer LRG --seeds 42 43 44 --nthreads 32 --name "LRG_SHOD_6p_ptcl_fit-LCDM_seed{seed}" \\
+        --satellites particles \\
         --los z --meshsize 512 --ells 0 2 4 --k-step 0.001 --mark-rcut 10 --mark-coefficients 1 -0.5
 """
 from __future__ import annotations
@@ -80,8 +83,11 @@ def parse_args() -> argparse.Namespace:
     cosmo.add_argument("--tcmb", type=float, required=True, help="K")
     cosmo.add_argument("--neff", type=float, required=True)
     hod = parser.add_argument_group("HOD mock")
-    hod.add_argument("--hod-param-file", type=Path, required=True, help="HODDIES parameter file (.yaml)")
-    hod.add_argument("--tracer", required=True, help="tracer of the parameter file, e.g. LRG")
+    hod.add_argument("--hod-fit", required=True,
+                     help="name of a fit of jobs/hod_fit.sh, e.g. LRG_SHOD_6p_ptcl: the HOD is its best_fit.yaml")
+    hod.add_argument("--hod-fit-model", required=True,
+                     help="model whose fit is used (same target, realization and redshift), e.g. LCDM")
+    hod.add_argument("--tracer", required=True, help="tracer of the fit, e.g. LRG")
     hod.add_argument("--seeds", type=int, nargs="+", required=True, help="one mock and P(k) per seed")
     hod.add_argument("--nthreads", type=int, required=True, help="HODDIES threads (the mock depends on it)")
     hod.add_argument("--satellites", required=True, choices=["particles", "nfw"],
@@ -103,8 +109,15 @@ def parse_args() -> argparse.Namespace:
 
     if "{seed}" not in args.name:
         raise SystemExit(f"--name must contain {{seed}} so that every seed has its own file, got {args.name!r}")
+    fit_dir = hp.hod_fit_dir(args.target, args.hod_fit_model, args.realization, args.redshift, args.hod_fit)
+    args.hod_param_file = fit_dir / "best_fit.yaml"
     if not args.hod_param_file.is_file():
-        raise SystemExit(f"No HOD parameter file {args.hod_param_file}")
+        raise SystemExit(f"No best-fit HOD {args.hod_param_file}: run jobs/hod_fit.sh on {args.hod_fit_model} "
+                         f"(or check HOD_FIT and HOD_FIT_MODEL)")
+    fit_settings = json.loads((fit_dir / "settings.json").read_text())
+    for key, value in (("satellites", args.satellites), ("tracer", args.tracer)):
+        if fit_settings[key] != value:
+            raise SystemExit(f"--{key} {value} differs from the fit's {fit_settings[key]} ({fit_dir})")
     if len(set(args.seeds)) != len(args.seeds):
         raise SystemExit(f"--seeds has duplicates: {args.seeds}")
     run = (args.target, args.model, args.realization, args.redshift)
@@ -199,6 +212,7 @@ def measure_seed(hoddies: dict, halos: np.ndarray, particles, seed: int, e_z: fl
         "boxsize": args.boxsize,
         "halo_catalog": str(catalog_file),
         "hod_param_file": str(args.hod_param_file),
+        "hod_fit": {"name": args.hod_fit, "model": args.hod_fit_model},
         "tracer": args.tracer,
         "satellites": args.satellites,
         "hod_parameters": hod_parameters,

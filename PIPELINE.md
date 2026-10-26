@@ -227,7 +227,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
 | `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `FIT_R_MIN`, `FIT_R_MAX`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
@@ -283,9 +283,10 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 - **HOD galaxy P(k)** (`jobs/hod_mock.sh`: `scripts/run_hod_mock.py`,
   `scripts/galaxy_power_spectrum.py`): a HODDIES mock of the chosen tracer is made from the halo
   array (satellites on member particles or the NFW profile, `SATELLITES`, as in the fits) with the
-  HOD of `HOD_PARAM_FILE`, normally the `best_fit.yaml` of a fit (see the HOD fit below; the same
-  file for both models compared, e.g. the LCDM fit for LCDM and nDGP, its `density` fixing the number
-  density in each), shifted to redshift space along `LOS` by v/(aH(z)) with H(z) of the run's cosmology, and
+  best-fit HOD (`best_fit.yaml`) of the fit `HOD_FIT` (see the HOD fit below) made on the run's own
+  model (`HOD_FIT_MODEL="own"`: each model with its own fit) or on another model of the same target,
+  realization and redshift (e.g. `"LCDM"` for every model); the fit's `density` fixes the number
+  density in each model. `TRACER` and `SATELLITES` must be those of the fit. Shifted to redshift space along `LOS` by v/(aH(z)) with H(z) of the run's cosmology, and
   measured with the estimator of the EMC/acm pipeline (copied from acm's
   `scripts/emc/measurements/abacus_small.py`): jaxpower, TSC, interlacing 3, compensation, shot
   noise from jaxpower; `MESHSIZE`, `ELLS`, `K_STEP` from the job (EMC values: 512, 0 2 4, 0.001),
@@ -298,8 +299,8 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   mean m̄; box normalization and shot noise of the marked galaxies, as in acm. The job refuses to
   run until both mark parameters are set. With the mark m = 1 it gives the P(k) exactly.
   One job makes one mock, P(k) and marked P(k) per seed of `SEEDS` (the halo array is loaded
-  once, ~1.5 min per seed at mesh 512); `NAME` contains `{seed}` (default `<TRACER>_seed{seed}`), so each seed has
-  its own file. A seed gives the same mock alone or in a list, but the mock also depends on
+  once, ~1.5 min per seed at mesh 512); the mocks are named `<HOD_FIT>_fit-<model of the fit>_seed<seed>`
+  (e.g. `LRG_SHOD_6p_ptcl_fit-nDGP_N1.2_seed3` on the nDGP run with its own fit). A seed gives the same mock alone or in a list, but the mock also depends on
   `NTHREADS`: keep it fixed across seeds and runs. Use the same seeds for the models compared.
 - **Abacus reference P(k)** (`scripts/run_abacus_power_spectrum.py`): halo + field particles
   of the chosen subsamples (A = 3%, B = 7%), TSC, interlaced, window compensated, shot noise
@@ -385,7 +386,7 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   and at the end `best_fit.json` (best evaluation of the whole fit, chi2 and per dof, p-value,
   galaxies, minimizer status), `best_fit.yaml` (the HOD parameter file with the tracer as in the
   fit and its free parameters at the best fit, `use_particles` as `SATELLITES`: the
-  `HOD_PARAM_FILE` of `jobs/hod_mock.sh`, path printed at the end of the log) and `best_fit_model.npz` (model vectors at the best fit for the fit
+  HOD of `jobs/hod_mock.sh` with `HOD_FIT` = the fit name) and `best_fit_model.npz` (model vectors at the best fit for the fit
   seed and the extra seeds, HOD occupation), and `reference_model.npz` the same for the HOD of
   `REFERENCE_PARAM_FILE` (all its values for the tracer, e.g. `HOD_parameter_file_z0.500.yaml`), with
   its chi2 in `best_fit.json` (`reference`) and a copy of the file. `HOD_fit.ipynb` (exploration) also writes its
@@ -425,7 +426,7 @@ imports:
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
-| `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, HOD name (with `{seed}`), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
+| `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, `hod_fit` and `hod_fit_model` (as in `hod_mock.sh`: each model's own fit or one model's fit for both), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
 | `HOD_fit.ipynb` | exploration of HOD fitting with HODDIES (the fits themselves: `jobs/hod_fit.sh`) | target, model, realization, redshift, parameter file, tracer, nthreads, seed |
 | `HOD_fit_results.ipynb` | results of a fit of `jobs/hod_fit.sh` (also while it runs): settings, best-fit parameters against priors, chi2 (total, per block, other seeds), data vs best-fit and reference-HOD models with residuals, convergence, parameters of every evaluation, HOD occupation | target, model, realization, redshift, fit name (printed by the job) |

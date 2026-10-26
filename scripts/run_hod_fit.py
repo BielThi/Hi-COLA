@@ -661,7 +661,8 @@ def main() -> int:
             + (f", of which {best['sat_nfw_fraction']:.1%} on the NFW profile (too few stored particles)"
                if best["sat_nfw_fraction"] is not None else ""))
         say(f"Saved:          {fit_dir}")
-        say(f"For the mocks:  HOD_PARAM_FILE=\"{best_yaml}\" and SATELLITES=\"{args.satellites}\" in jobs/hod_mock.sh")
+        say(f"For the mocks:  HOD_FIT=\"{name}\" (HOD_FIT_MODEL \"own\" or \"{args.model}\") and SATELLITES=\"{args.satellites}\" "
+            f"in jobs/hod_mock.sh ({best_yaml.name})")
     return 0
 
 
