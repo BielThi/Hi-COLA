@@ -242,7 +242,7 @@ on the command line.
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS`, `NAME` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
-| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `FIT_R_MIN`, `FIT_R_MAX`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
@@ -376,16 +376,19 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 - **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<name>/`
   (`jobs/hod_fit.sh`, `scripts/run_hod_fit.py`, `hp.hod_fit_dir`; shown by `HOD_fit_results.ipynb`,
   read with `an.load_hod_fit`), written there directly (not on scratch). The name says what is
-  fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>]` (HODDIES' fit model name, the
-  satellites, and the statistics only when not all of wp + xi_0 + xi_2), e.g. `LRG_SHOD_6p_ptcl`,
-  `LRG_SHOD_6p_nfw`, `LRG_SHOD_6p_ptcl_wp`; a new fit of the same thing replaces the folder (the
+  fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>][_r<min>-<max>]` (HODDIES' fit
+  model name, the satellites, the statistics only when not all of wp + xi_0 + xi_2, and the fit
+  range only when `FIT_R_MIN` or `FIT_R_MAX` is set), e.g. `LRG_SHOD_6p_ptcl`, `LRG_SHOD_6p_nfw`,
+  `LRG_SHOD_6p_ptcl_wp`, `LRG_SHOD_6p_ptcl_r0.1-10`, `LRG_SHOD_6p_ptcl_rmin-10`; a new fit of the same thing replaces the folder (the
   settings of each fit are in its `settings.json`). Satellites (`SATELLITES`): `particles` = a
   random member particle of the halo (`halos200c_particles.npy`), velocity
   v_halo + f_sigv (v_particle − v_halo), the NFW profile for the satellites beyond the stored
   particles of their halo (fraction in `best_fit.json`, `sat_nfw_fraction`); `nfw` = HODDIES' NFW
   profile (Rh, c), velocity dispersion Vrms f_sigv. `CORRELATION_STATISTICS` says what the
-  correlation matrix covers (wp, then xi_ell per ell, with the bins of the data); the blocks of the
-  fitted statistics are used. Files:
+  correlation matrix covers (wp, then xi_ell per ell, with the bins of `RP_RANGE` and `S_RANGE`);
+  the blocks of the fitted statistics are used. `FIT_R_MIN`/`FIT_R_MAX` restrict the fit to the bins
+  entirely inside that range, the same for rp and s ("None" = no limit on that side); the model is
+  measured on those bins and the covariance is the matching sub-block of the full matrix. Files:
   `settings.json` (all settings of the job, run, H(z), code versions, job log), a copy of the HOD
   parameter file, `data.npz` (the fitted data: separations, values, errors, data vector, covariance,
   bin edges), `evaluations/rank_<k>.txt` (every evaluation of rank k: parameters, chi2, galaxies,

@@ -16,8 +16,9 @@
 # member particles (halos200c_particles.npy, PARTICLE_FRACTION > 0 in the halo finder).
 # Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<name>/,
 # named after what is fitted: <tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>], the
-# statistics only when not all of wp + xi_0 + xi_2, e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp. A new
-# fit of the same thing replaces the earlier results. Shown by Notebooks/HOD_fit_results.ipynb.
+# statistics only when not all of wp + xi_0 + xi_2, and _r<min>-<max> when the fit range is
+# restricted, e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp, LRG_SHOD_6p_ptcl_r0.1-10. A new fit of the
+# same thing replaces the earlier results. Shown by Notebooks/HOD_fit_results.ipynb.
 #
 # Edit the parameters below, then submit it (from any folder):
 #   sbatch ~/dev-v2/Hi-COLA/jobs/hod_fit.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_fit.sh)
@@ -57,6 +58,11 @@ S_RANGE="0.2 32"          # with the files above: 26 bins, 0.215 to 31.6 Mpc/h
 # statistics are used. The wp and xi_ell settings above are needed for all of them, fitted or not.
 CORRELATION="DESI_Y1_LRG/M_corr_lrg_z0.5.txt"
 CORRELATION_STATISTICS="wp xi_ells"
+# Fit range [Mpc/h], the same for rp and s: only the bins (of the ranges above) entirely between
+# FIT_R_MIN and FIT_R_MAX are fitted, e.g. "1e-1" and "1e1"; "None" = no limit on that side. With a
+# limit the results are named ..._r<min>-<max> (e.g. _r0.1-10, _rmin-10), without one as usual.
+FIT_R_MIN="None"
+FIT_R_MAX="None"
 
 # Model: line of sight of the redshift-space distortions (box axis); HOD seed of every mock of the
 # fit; extra seeds of the best-fit model (for its mock-to-mock scatter)
@@ -127,7 +133,7 @@ read -r -a S_LIST <<< "$S_RANGE"
 read -r -a ELL_LIST <<< "$ELLS"
 DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-statistics "${CORRELATION_STATISTIC_LIST[@]}"
       --pimax "$PIMAX" --rp-rebin "$RP_REBIN" --rp-range "${RP_LIST[@]}"
-      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --los "$LOS"
+      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --fit-r-min "$FIT_R_MIN" --fit-r-max "$FIT_R_MAX" --los "$LOS"
       --satellites "$SATELLITES")
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
 FIT=(--method "$METHOD" --maxiter "$MAXITER" --popsize "$POPSIZE" --xtol "$XTOL" --start "$START"
@@ -143,6 +149,7 @@ echo "Satellites:     $SATELLITES"
 echo "Data:           fitted: $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $RP_REBIN, pi_max $PIMAX; xi_ell: ells $ELLS, s in [$S_RANGE] Mpc/h, rebin $S_REBIN"
 echo "                $DATA_RPPI"
 echo "                $DATA_SMU"
+echo "Fit range:      $FIT_R_MIN to $FIT_R_MAX Mpc/h (rp and s)"
 echo "Covariance:     jackknife errors x $CORRELATION (covering $CORRELATION_STATISTICS)"
 echo "Model:          RSD along $LOS, mock seed $MOCK_SEED, extra seeds of the best fit $MODEL_SEEDS"
 echo "Reference HOD:  $REFERENCE_PARAM_FILE"

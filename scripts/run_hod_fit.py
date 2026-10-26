@@ -5,7 +5,9 @@ Run by jobs/hod_fit.sh (MPI: one HOD object per rank; the ranks share the evalua
 iteration of the minimizer).
 
 Data:   wp(rp) and/or the multipoles xi_ell(s) of pycorr two-point estimators (e.g. DESI Y1 LRG),
-        rebinned and restricted to the chosen separation ranges (bins entirely inside them).
+        rebinned and restricted to the chosen separation ranges (bins entirely inside them), which
+        are also the bins of the correlation matrix. The fit can be restricted further to
+        --fit-r-min <= rp, s <= --fit-r-max (bins entirely inside; 'None' = no limit on that side).
         Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks)
         covering the statistics --correlation-statistics (its blocks of the fitted ones are
         used), or diagonal ("none").
@@ -23,8 +25,9 @@ Fit:    a stochopy minimizer (e.g. cmaes) over the free HOD parameters within th
 
 Output (hp.hod_fit_dir, kept in hicola_data next to the run's measurements), in a folder named
 after what is fitted: <tracer>_<HOD model>_<n free>p_<satellites>[_<statistics>] (HODDIES' fit model
-name, ptcl or nfw, and the statistics only when not all of wp + xi_0 + xi_2), e.g. LRG_SHOD_6p_ptcl,
-LRG_SHOD_6p_nfw, LRG_SHOD_6p_ptcl_wp; a new fit of the same thing replaces it:
+name, ptcl or nfw, the statistics only when not all of wp + xi_0 + xi_2, and _r<min>-<max> when
+the fit range is restricted), e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp, LRG_SHOD_6p_ptcl_r0.1-10,
+LRG_SHOD_6p_ptcl_rmin-10; a new fit of the same thing replaces it:
     settings.json              the settings of the fit, the run and the code versions
     <HOD parameter file>.yaml  copy of the HOD parameter file
     data.npz                   the fitted data: separations, values, errors, data vector, covariance
@@ -94,6 +97,8 @@ def parse_args() -> argparse.Namespace:
     xi.add_argument("--ells", type=int, nargs="+")
     xi.add_argument("--s-rebin", type=int)
     xi.add_argument("--s-range", type=float, nargs=2, metavar=("MIN", "MAX"))
+    data.add_argument("--fit-r-min", required=True, help="smallest rp and s fitted [Mpc/h], or 'None'")
+    data.add_argument("--fit-r-max", required=True, help="largest rp and s fitted [Mpc/h], or 'None'")
     data.add_argument("--los", required=True, choices=["x", "y", "z"], help="line of sight of the model (box axis)")
     data.add_argument("--satellites", required=True, choices=["particles", "nfw"],
                       help="satellites on member particles or on HODDIES' NFW profile")
@@ -116,6 +121,14 @@ def parse_args() -> argparse.Namespace:
     if len(set(args.statistics)) != len(args.statistics):
         raise SystemExit(f"--statistics has duplicates: {args.statistics}")
     args.statistics = [s for s in STATISTICS if s in args.statistics]  # the order of the data vector
+    for name in ("fit_r_min", "fit_r_max"):
+        value = getattr(args, name)
+        try:
+            setattr(args, name, None if value == "None" else float(value))
+        except ValueError:
+            raise SystemExit(f"--{name.replace('_', '-')} must be a number or 'None', got {value!r}")
+    if None not in (args.fit_r_min, args.fit_r_max) and not args.fit_r_min < args.fit_r_max:
+        raise SystemExit("--fit-r-min must be below --fit-r-max")
     args.correlation_statistics = [s for s in STATISTICS if s in args.correlation_statistics]
     if args.correlation != "none" and not set(args.statistics) <= set(args.correlation_statistics):
         raise SystemExit(f"The correlation matrix covers {args.correlation_statistics}, not all the fitted {args.statistics}")
@@ -159,16 +172,29 @@ def select_bins(edges: np.ndarray, separation_range) -> slice:
     return slice(inside[0], inside[-1] + 1)
 
 
+def fit_bins(edges: np.ndarray, args: argparse.Namespace) -> slice:
+    """Bins (of the data selected by RP_RANGE or S_RANGE) entirely inside the fit range."""
+    low = -np.inf if args.fit_r_min is None else args.fit_r_min
+    high = np.inf if args.fit_r_max is None else args.fit_r_max
+    return select_bins(edges, (low, high))
+
+
 def load_data(args: argparse.Namespace) -> dict:
-    """Data vector (fitted statistics in the order of args.statistics), the measured statistics with
-    their errors and bin edges, and the covariance (block of the fitted statistics)."""
+    """Data vector (fitted statistics in the order of args.statistics, bins in the fit range), the
+    measured statistics with their errors and bin edges (fit range), and the covariance (block of
+    the fitted statistics and bins)."""
     from pycorr import TwoPointCorrelationFunction
 
     data = {}
     values, errors = {}, {}
+    full_size, kept = {}, {}   # per statistic: size in the correlation matrix's layout, indices of the fitted bins
     if "wp" in args.loaded_statistics:
         estimator = TwoPointCorrelationFunction.load(str(args.data_rppi))[::args.rp_rebin]
         estimator = estimator[select_bins(estimator.edges[0], args.rp_range)]
+        n_rp = estimator.shape[0]
+        in_range = fit_bins(estimator.edges[0], args)
+        estimator = estimator[in_range]
+        full_size["wp"], kept["wp"] = n_rp, np.arange(n_rp)[in_range]
         if args.pimax > estimator.edges[1][-1]:
             raise SystemExit(f"--pimax {args.pimax} beyond the pi edges of the data ({estimator.edges[1][-1]})")
         rp, wp, wp_err = estimator(pimax=args.pimax, return_sep=True, return_std=True)
@@ -177,6 +203,11 @@ def load_data(args: argparse.Namespace) -> dict:
     if "xi_ells" in args.loaded_statistics:
         estimator = TwoPointCorrelationFunction.load(str(args.data_smu))[::args.s_rebin]
         estimator = estimator[select_bins(estimator.edges[0], args.s_range)]
+        n_s = estimator.shape[0]
+        in_range = fit_bins(estimator.edges[0], args)
+        estimator = estimator[in_range]
+        full_size["xi_ells"] = n_s * len(args.ells)
+        kept["xi_ells"] = np.concatenate([i * n_s + np.arange(n_s)[in_range] for i in range(len(args.ells))])
         s, xi, cov = estimator.get_corr(ells=tuple(args.ells), return_sep=True, return_cov=True)
         xi_err = np.sqrt(np.diag(cov)).reshape(len(args.ells), -1)
         data.update(s=s, xi=np.asarray(xi), xi_err=xi_err, ells=np.array(args.ells),
@@ -189,13 +220,13 @@ def load_data(args: argparse.Namespace) -> dict:
         correlation = np.eye(data_vec.size)
     else:
         full = np.loadtxt(args.correlation)
-        sizes = {s: values[s].size for s in args.correlation_statistics}
+        sizes = {s: full_size[s] for s in args.correlation_statistics}
         if full.shape != (sum(sizes.values()),) * 2:
             raise SystemExit(f"The correlation matrix {args.correlation} is {full.shape}, but "
                              f"{' + '.join(f'{s} ({n})' for s, n in sizes.items())} have {sum(sizes.values())} values: "
                              "the ranges, rebinning or ells differ from those of the matrix")
         start = dict(zip(sizes, np.cumsum([0] + list(sizes.values()))[:-1]))
-        rows = np.concatenate([np.arange(start[s], start[s] + sizes[s]) for s in args.statistics])
+        rows = np.concatenate([start[s] + kept[s] for s in args.statistics])
         correlation = full[np.ix_(rows, rows)]
     data.update(data_vec=data_vec, data_err=data_err, correlation=correlation,
                 cov=np.outer(data_err, data_err) * correlation)
@@ -287,6 +318,9 @@ def fit_name(hod, args: argparse.Namespace) -> str:
     if (args.statistics, args.ells if "xi_ells" in args.statistics else None) != FULL_STATISTICS:
         labels = ["wp" if s == "wp" else "xi" + "".join(str(ell) for ell in args.ells) for s in args.statistics]
         name += "_" + "+".join(labels)
+    if args.fit_r_min is not None or args.fit_r_max is not None:
+        bound = lambda value, word: word if value is None else f"{value:g}"
+        name += f"_r{bound(args.fit_r_min, 'min')}-{bound(args.fit_r_max, 'max')}"
     return name
 
 
@@ -457,7 +491,8 @@ def main() -> int:
                                                  f"fraction {particle_info['particle_fraction']})" if particle_file else ""))
     say(f"Data vector:    {data['data_vec'].size} values ({' + '.join(args.statistics)})"
         + (f", wp: {data['rp'].size} rp bins {data['edges_rp'][0]:.4g}-{data['edges_rp'][-1]:.4g} Mpc/h" if "wp" in data else "")
-        + (f", xi_ell: {data['s'].size} s bins {data['edges_s'][0]:.4g}-{data['edges_s'][-1]:.4g} Mpc/h" if "s" in data else ""))
+        + (f", xi_ell: {data['s'].size} s bins {data['edges_s'][0]:.4g}-{data['edges_s'][-1]:.4g} Mpc/h" if "s" in data else "")
+        + f"; fit range {args.fit_r_min} to {args.fit_r_max} Mpc/h")
 
     halos = np.load(halo_array)
     particles = np.load(particle_file) if particle_file else None
@@ -503,7 +538,7 @@ def main() -> int:
             "data": {"statistics": args.statistics, "rppi": str(args.data_rppi), "smu": str(args.data_smu),
                      "correlation": args.correlation, "correlation_statistics": args.correlation_statistics,
                      "pimax": args.pimax, "rp_rebin": args.rp_rebin,
-                     "rp_range": args.rp_range, "ells": args.ells, "s_rebin": args.s_rebin,
+                     "rp_range": args.rp_range, "fit_r_range": [args.fit_r_min, args.fit_r_max], "ells": args.ells, "s_rebin": args.s_rebin,
                      "s_range": args.s_range, "n_data": int(data["data_vec"].size)},
             "model": {"los": args.los, "rsd": True, "mock_seed": args.mock_seed, "model_seeds": args.model_seeds,
                       "reference_param_file": str(args.reference_param_file)},
