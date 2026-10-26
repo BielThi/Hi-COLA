@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=backend
-#SBATCH -o /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 8
 #SBATCH -n 512
 #SBATCH --mem-per-cpu=6G

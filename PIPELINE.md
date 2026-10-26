@@ -14,24 +14,9 @@ Hi-COLA itself (`HiCOLA/`) keeps its original layout and file names. What was ad
 `HiCOLA/Parameter_files/Backend_parameter_files/`. The data lives outside the repository, in
 `hicola_data/` (reference data, kept results) and on scratch (simulation outputs).
 
-**This branch, `hicola-dev-v2`**, is the pipeline adapted to HODDIES dev-v2 (fork branch
-`hicola-dev-v2`). It lives next to the `main` pipeline (old HODDIES), which stays as it was:
-
-```
-~/Hi-COLA        main             ~/dev-v2/Hi-COLA     hicola-dev-v2   (git worktrees of the
-~/HODDIES        main             ~/dev-v2/HODDIES     hicola-dev-v2    same two repositories)
-~/hicola_data                     ~/dev-v2/hicola_data -> ~/hicola_data
-```
-
-Both share the run files, the simulations on scratch, the halo catalogs and `hicola_data`. Kept
-apart (`HOD_LABEL` in `scripts/hicola_paths.py`): the HOD outputs, because the mocks differ between
-HODDIES versions (`halo_catalog/hod_dev-v2/` and `..._HOD-dev-v2_<name>_...` here, `halo_catalog/hod/`
-and `..._HOD_<name>_...` on `main`), and the HODDIES halo array (`halos200c_hoddies_dev-v2.npy` here,
-with comoving radii; `halos200c_hoddies.npy` on `main`, physical). The halo finder of this branch
-rewrites the shared halo catalog and HMF (the same FoF, same content) and can add
-`halos200c_particles.npy`, which only this branch uses. Each clone has its own
-`nbody` build, frontend tables (`HiCOLA/Output/`) and job logs. Submit the jobs of this pipeline
-from `~/dev-v2/Hi-COLA/jobs/`.
+**HODDIES version**: the HOD parts use HODDIES **dev-v2**, through the fork `BielThi/HODDIES`,
+branch `hicola-dev-v2` (the upstream `dev-v2` plus a few fixes, section 4), checked out next to
+this repository.
 
 Contents: 1 quick start · 2 design rules · 3 where things live · 4 software setup · 5 runs and
 their names · 6 running jobs · 7 halo finder and measurements · 8 data and file formats ·
@@ -96,7 +81,6 @@ These were chosen on purpose; keep them when changing the pipeline.
 │   └── Notebooks/                  analysis notebooks and HOD parameter files (section 9)
 ├── HODDIES/                        HOD code (fork BielThi/HODDIES)                 $HODDIES_ROOT
 ├── hicola_data/                    reference data + kept measurements, README.md   $HICOLA_DATA_ROOT
-└── dev-v2/                         this branch: Hi-COLA/, HODDIES/ (worktrees), hicola_data -> ../hicola_data
 /scratch/biel/Hi-COLA_Output/       simulation outputs: <target>/<model>/<realization>/   run root
 ```
 
@@ -137,12 +121,13 @@ clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL
 the `USE_*` lines at the top of the Makefile.
 
 **HODDIES**: the fork `github.com/BielThi/HODDIES`, branch `hicola-dev-v2`, checked out next to
-this repository (`~/dev-v2/HODDIES`, a worktree of `~/HODDIES`, whose `main` serves the `main`
-pipeline). The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
+this repository (`~/HODDIES`). The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
 from the `HODDIES` package installed in the env, which is a different copy. `hicola-dev-v2` is
-the upstream branch `dev-v2` (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus two
-fixes: the merge conflict left in the imports of `hod.py` resolved, and `torch` imported only
-by the emulator functions that use it (the env has no torch). Since dev-v2 a HOD object is
+the upstream branch `dev-v2` (remote `upstream` = `github.com/antoine-rocher/HODDIES`) plus
+fixes: the merge conflict left in the imports of `hod.py` resolved, `torch` imported only
+by the emulator functions that use it (the env has no torch), positions wrapped into the box
+without float32 round-off (`utils.wrap_box`), NFW-fallback satellites of `use_particles` placed
+around their host, and no hardcoded paths in `run_optimiser.py`. Since dev-v2 a HOD object is
 built from a halo catalogue:
 ```python
 from HODDIES.sim_loader import Base_catalogue
@@ -152,8 +137,8 @@ HOD_obj.cosmo = cosmology                           # for the RSD of get_wp / ge
 ```
 (the halo array is passed as a dict: a structured array is refused). The mock of a seed depends
 on the HODDIES version: mocks made with the fork's old `main` (commit `2572a69`, numba
-parallelism off) differ from dev-v2 ones and must not be mixed; the HOD job records the HODDIES
-branch and commit in each output's `.json`.
+parallelism off) differ from dev-v2 ones and must not be mixed; the HOD jobs record the HODDIES
+branch and commit in each output's `.json`. The fork's `main` is that old version.
 
 **hi_class**: the env on jed has a `classy` built from `~/hi_class_public`
 (`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline uses it any more
@@ -224,9 +209,9 @@ snapshot_<simulation_name>_z<z>/           one per output redshift
 └── halo_catalog/                          written by the halo finder
     ├── halos200c_catalog.npy (+ .json)    FoF halos with M200c (section 8)
     ├── halos200c_hmf.txt (+ .json)        HMF: this is the "HMF" that is kept
-    ├── halos200c_hoddies_dev-v2.npy (+ .json)  the same halos in HODDIES' format (Rh comoving)
+    ├── halos200c_hoddies.npy (+ .json)    the same halos in HODDIES' format (Rh comoving)
     ├── halos200c_particles.npy (+ .json)  member particles, with PARTICLE_FRACTION > 0
-    └── halos200c_hoddies.npy (+ .json)    HODDIES array of the main branch (Rh physical)
+    └── hod/                               HOD mock P(k) and marked P(k) (jobs/hod_mock.sh)
 ```
 
 ## 6. Running jobs
@@ -266,7 +251,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
 - **Logs**: `HiCOLA/Output/logs/<job name>_<job id>.out` and `.err`, at the full path written
-  in the `#SBATCH -o/-e` lines (`/home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/` on this branch). Each log starts
+  in the `#SBATCH -o/-e` lines (`/home/biel/Hi-COLA/HiCOLA/Output/logs/`). Each log starts
   with what was run: job, code commit (and whether there were uncommitted changes), conda
   env, run and data roots; for the backend and halo finder the run file with its box,
   particles, steps, z_init, gravity, cosmology, initial P(k), seed, fixed/inverted, output
@@ -352,31 +337,31 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   `velocity_definition` were made before this fix (2026-10-14) and have velocities too large by
   √(1+z): the halo outputs, the HOD-mock job and the HOD/LRG notebooks refuse them; rerun the
   halo finder.
-- **HODDIES array** `halos200c_hoddies_dev-v2.npy` (`scripts/run_halo_outputs.py`):
+- **HODDIES array** `halos200c_hoddies.npy` (`scripts/run_halo_outputs.py`):
   `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id` (peculiar velocities), with `Rh`, `Rs` in
   **comoving** kpc/h: nbodykit's `r200c` is physical, HODDIES places satellites in comoving units
-  (like Abacus' comoving `r98`), so `Rh = r200c (1+z)`. The main branch's `halos200c_hoddies.npy`
-  keeps the physical radii (its satellites are 1+z too close to their halo's centre).
+  (like Abacus' comoving `r98`), so `Rh = r200c (1+z)`. Arrays made before 2026-10-26 had the physical radii (satellites 1+z
+  too close to their halo's centre).
 - **Member particles** `halos200c_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
   a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
   halo, `x y z` [Mpc/h], `vx vy vz` [peculiar km/s], `halo_id` = row of the halo catalog of the same
   FoF (= FoF label − 1; checked against the halo masses). A halo finder run without particles
   removes an older particle file (its halo_id would not match). For the HOD fits with
   `SATELLITES="particles"`.
-- **HOD galaxy P(k)** `halo_catalog/hod_dev-v2/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
-  `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_<name>_PS.txt`: the
+- **HOD galaxy P(k)** `halo_catalog/hod/<name>_PS.txt` (+ `.h5`, `.txt.json`; `jobs/hod_mock.sh`,
+  `scripts/run_hod_mock.py`), kept as `HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt`: the
   redshift-space power spectrum multipoles of a HODDIES mock (one file per seed), columns k [h/Mpc], N_modes,
   P_0, P_2, P_4 [(Mpc/h)³, shot noise subtracted]. The `.h5` is jaxpower's own format (`lsstypes`),
   the same as the EMC measurements; the `.json` holds the run, HOD settings and parameters,
   number of galaxies and density, H(z) and the estimator settings. The mock itself is not kept.
   The k-bins are 0.001 h/Mpc wide (as in EMC): the first row is the k = 0 mode and bins without
   modes (N_modes = 0) are NaN; skip both, and rebin (weighting by N_modes) for plots.
-- **HOD marked P(k)** `halo_catalog/hod_dev-v2/<name>_MPS.txt` (+ `.h5`, `.txt.json`), kept as
-  `HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_<name>_MPS.txt`: the marked power spectrum of the same mock,
+- **HOD marked P(k)** `halo_catalog/hod/<name>_MPS.txt` (+ `.h5`, `.txt.json`), kept as
+  `HiCOLA_<simulation_name>_z<z>_HOD_<name>_MPS.txt`: the marked power spectrum of the same mock,
   same columns and bins. The `.json` also holds the mark (R, coefficients, m̄, min and max of m on
   the mesh), and the `.h5` has m_bar, m_min, m_max as attributes, as acm writes them. The file
   name does not contain the mark: a rerun with another mark overwrites it (check the `.json`).
-- **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD-dev-v2_fit_<name>/`
+- **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD_fit_<name>/`
   (`jobs/hod_fit.sh`, `scripts/run_hod_fit.py`, `hp.hod_fit_dir`; shown by `HOD_fit_results.ipynb`,
   read with `an.load_hod_fit`), written there directly (not on scratch). The name says what is
   fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>][_r<min>-<max>]` (HODDIES' fit
@@ -454,7 +439,7 @@ In the comparison notebooks, a run that doesn't exist is skipped with a message.
 
 ```bash
 Sinteract -n 72 -c 1 -m 256G -t 04:00:00 -p academic
-cd ~/dev-v2/Hi-COLA        # the clone of the pipeline used (~/Hi-COLA for main)
+cd ~/Hi-COLA
 conda activate hicola
 ipnport=$(shuf -i8000-9999 -n1)
 jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
@@ -463,7 +448,7 @@ jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
 Start the server inside the clone: kernels of a remote server (e.g. VSCode connected to it)
 start in the server's folder, and the notebooks find the repository (and through it the
 HODDIES clone) from their working directory. From `~` the first cell fails with
-`StopIteration`; from the other clone it silently uses that pipeline. One server per pipeline.
+`StopIteration`.
 
 ## 10. Adding runs or reference simulations
 
@@ -483,7 +468,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
 ## 11. Setting up on another machine
 
-1. Clone `BielThi/Hi-COLA` and `BielThi/HODDIES`, both on branch `hicola-dev-v2`, into the same folder, copy `hicola_data/`
+1. Clone `BielThi/Hi-COLA` (branch `main`) and `BielThi/HODDIES` (branch `hicola-dev-v2`) into the same folder, copy `hicola_data/`
    next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
 2. Create the `hicola` conda env (section 4), build `nbody` with it activated, run
    `nbstripout --install` in the clone.
@@ -495,7 +480,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
    ```bash
    sed -i 's#/scratch/biel/Hi-COLA_Output#<new scratch path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua
-   sed -i 's#/home/biel/dev-v2/Hi-COLA/#<new Hi-COLA path>/#' jobs/*.sh
+   sed -i 's#/home/biel/Hi-COLA/#<new Hi-COLA path>/#' jobs/*.sh
    ```
    Export the scratch path as `HICOLA_RUN_ROOT` for the notebooks if it isn't
    `/scratch/$USER/Hi-COLA_Output`. A second clone on jed needs the log-folder `sed`.
@@ -537,7 +522,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 | `--mass-grid reference: there is no reference HMF` | `HMF_MASS_GRID="reference"` for a target/redshift without reference HMF; use `MIN MAX N` |
 | sbatch: `exceeds MaxMemPerCPU` | more than 7000 MB per core requested; lower `--mem-per-cpu`/`--mem` or add cores |
 | notebook: "Skipping … No PS for …" | the run (or that redshift) doesn't exist on scratch nor in `hicola_data/hicola/` |
-| HOD notebook or job: missing `halos200c_hoddies_dev-v2.npy` (or `halos200c_particles.npy`) | run the halo finder of this branch on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
+| HOD notebook or job: missing `halos200c_hoddies.npy` (or `halos200c_particles.npy`) | run the halo finder on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
 | `CondaError: Run 'conda init'` | conda not found as a shell function; `jobs/hicola_env.sh` looks in `$CONDA_EXE`, the PATH, `~/miniconda3`, `~/anaconda3` |
 
 ## 14. Known issues
@@ -583,6 +568,11 @@ Velocity fix (2026-10-14): halo catalogs made before it carry Gadget velocities 
 labelled as km/s, too large by √(1+z) (1.22 at z = 0.5). Real-space results (positions, masses,
 HMF, P(k)) are unaffected; anything in redshift space made from those catalogs (HOD mocks, RSD
 multipoles, HODDIES clustering with RSD) should be redone after rerunning the halo finder.
+
+HODDIES dev-v2 (2026-10-26): the pipeline was developed on the branch `hicola-dev-v2` (next to
+`main`, with its outputs labelled `dev-v2`) and merged into `main`, without the label. The HOD
+results of the old pipeline (old HODDIES, physical `Rh`, NFW satellites) are archived in
+`hicola_data/archive/main_2026-10/`; `5fd193f` is the last commit of that pipeline.
 
 Fixed during the reorganisation: the `_a`/`_ma` Bart runs (`LCDM_Bart_a/_ma`) wrote to the
 same output folder as `LCDM_Bart`, and the nDGP `_a/_ma` Bart runs used seed 4321 and

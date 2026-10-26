@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=halo_finder
-#SBATCH -o /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 8
 #SBATCH -n 512
 #SBATCH --mem-per-cpu=6G
@@ -9,7 +9,7 @@
 #SBATCH --time=4:30:00
 #SBATCH --partition=academic
 # FoF halo finding on one snapshot of a Hi-COLA run, then the HMF and the HODDIES halo array
-# (halos200c_hoddies_dev-v2.npy, Rh comoving), then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
+# (halos200c_hoddies.npy, Rh comoving), then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
 # With PARTICLE_FRACTION > 0 it also keeps a random subsample of the halo member particles
 # (halos200c_particles.npy, same halo_id as the catalog), for the HOD fits with SATELLITES="particles".
 #

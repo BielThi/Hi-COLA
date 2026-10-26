@@ -11,7 +11,7 @@ Data:   wp(rp) and/or the multipoles xi_ell(s) of pycorr two-point estimators (e
         Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks)
         covering the statistics --correlation-statistics (its blocks of the fitted ones are
         used), or diagonal ("none").
-Model:  HODDIES mocks on the run's halos (jobs/halo_finder.sh: halos200c_hoddies_dev-v2.npy, Rh
+Model:  HODDIES mocks on the run's halos (jobs/halo_finder.sh: halos200c_hoddies.npy, Rh
         comoving), all with the same seed, measured with the bins of the data (pycorr, redshift
         space along the line of sight with H(z) of the run's cosmology); chi2 as HODDIES'
         func_stochopy. Satellites (--satellites):

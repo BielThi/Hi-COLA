@@ -1,8 +1,6 @@
 # Hi-COLA comparison pipeline: notes for Claude
 
-This is the branch `hicola-dev-v2` (pipeline with HODDIES dev-v2), checked out in
-`~/dev-v2/Hi-COLA` next to the `main` pipeline in `~/Hi-COLA`; keep the two separate (PIPELINE.md,
-top). Read `PIPELINE.md` first: it describes the whole pipeline (layout, runs, jobs, data, notebooks,
+Read `PIPELINE.md` first: it describes the whole pipeline (layout, runs, jobs, data, notebooks,
 setup on a new machine, troubleshooting, history). The data is described in
 `../hicola_data/README.md`.
 

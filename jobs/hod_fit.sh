@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hod_fit
-#SBATCH -o /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 # -n: MPI ranks, each evaluates POPSIZE/ranks points per iteration (POPSIZE a multiple of it);
 # --cpus-per-task: threads per rank (HODDIES and pycorr), the mocks depend on it
 #SBATCH -N 1
@@ -12,16 +12,16 @@
 #SBATCH --partition=academic
 # Fit of the HOD parameters on the halos of one snapshot of a Hi-COLA run to measured clustering
 # (wp and/or xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py). Uses the
-# halos of jobs/halo_finder.sh (halos200c_hoddies_dev-v2.npy) and, for SATELLITES="particles", its
+# halos of jobs/halo_finder.sh (halos200c_hoddies.npy) and, for SATELLITES="particles", its
 # member particles (halos200c_particles.npy, PARTICLE_FRACTION > 0 in the halo finder).
-# Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<name>/,
+# Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD_fit_<name>/,
 # named after what is fitted: <tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>], the
 # statistics only when not all of wp + xi_0 + xi_2, and _r<min>-<max> when the fit range is
 # restricted, e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp, LRG_SHOD_6p_ptcl_r0.1-10. A new fit of the
 # same thing replaces the earlier results. Shown by Notebooks/HOD_fit_results.ipynb.
 #
 # Edit the parameters below, then submit it (from any folder):
-#   sbatch ~/dev-v2/Hi-COLA/jobs/hod_fit.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_fit.sh)
+#   sbatch ~/Hi-COLA/jobs/hod_fit.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_fit.sh)
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation, relative to the Hi-COLA folder (or absolute), and the snapshot

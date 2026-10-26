@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
 
-The HODDIES array of this branch is halos200c_hoddies_dev-v2.npy, with Rh and Rs in comoving kpc/h
-(nbodykit's r200c is physical); the main branch's halos200c_hoddies.npy, physical, is not touched.
+The HODDIES array is halos200c_hoddies.npy, with Rh and Rs in comoving kpc/h (nbodykit's r200c is
+physical).
 
 The HMF mass grid is chosen with --mass-grid:
     reference        the masses of the target's reference HMF at the same redshift (Box1, LCDM),

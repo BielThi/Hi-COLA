@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hod_mock
-#SBATCH -o /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
-#SBATCH -e /home/biel/dev-v2/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
+#SBATCH -o /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.out
+#SBATCH -e /home/biel/Hi-COLA/HiCOLA/Output/logs/%x_%j.err
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=32
@@ -27,7 +27,7 @@ REDSHIFT="0.500"
 # or any parameter file, e.g. Notebooks/HOD_parameter_file_z0.500.yaml. The same file for every model
 # compared (e.g. the fit on LCDM for both LCDM and nDGP). If it sets the tracer's `density` (the
 # fits do), HODDIES rescales Ac to reach it, in each model.
-HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD-dev-v2_fit_LRG_SHOD_6p_ptcl_r1-max/best_fit.yaml"
+HOD_PARAM_FILE="../hicola_data/hicola/Abacus_Small/LCDM/s1234/HiCOLA_Abacus_Small_LCDM_s1234_z0.500_HOD_fit_LRG_SHOD_6p_ptcl_r1-max/best_fit.yaml"
 TRACER="LRG"
 # Satellites: "particles" (random member particles of the halo: jobs/halo_finder.sh with PARTICLE_FRACTION > 0)
 # or "nfw" (HODDIES' NFW profile); as in the fit (its best_fit.yaml says which)
@@ -46,7 +46,7 @@ K_STEP="0.001"   # k-bin width [h/Mpc]
 MARK_RCUT="25"          # R [Mpc/h], e.g. "10"
 MARK_COEFFICIENTS="1 -1"  # c_0 c_1 c_2 ..., e.g. "1 -0.5"
 
-# Output: halo_catalog/hod_dev-v2/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed;
+# Output: halo_catalog/hod/<NAME>_PS.txt and <NAME>_MPS.txt in the run folder, {seed} replaced by each seed;
 # name it after the HOD used (e.g. the fit name) so that mocks of different HODs stay apart (name in marked.ipynb)
 NAME="LRG_SHOD_6p_ptcl_r1-max_seed{seed}"
 # -------------------------------------------------------------------------

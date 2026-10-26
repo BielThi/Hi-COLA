@@ -90,15 +90,11 @@ def halo_catalog_file(target: str, model: str, realization: str, redshift: float
     return halo_catalog_dir(target, model, realization, redshift) / "halos200c_catalog.npy"
 
 
-# Outputs of this branch (HODDIES dev-v2) are kept apart from those of the main branch (old HODDIES)
-# that share the run folders: HOD outputs in halo_catalog/hod_dev-v2/ and ..._HOD-dev-v2_<name>_...
-# (the mocks differ between versions), and the HODDIES halo array (Rh comoving here, physical on main).
-HOD_LABEL = "dev-v2"
-HODDIES_ARRAY_NAME = f"halos200c_hoddies_{HOD_LABEL}.npy"
+HODDIES_ARRAY_NAME = "halos200c_hoddies.npy"
 
 
 def hoddies_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    """HODDIES halo array of this branch (scripts/run_halo_outputs.py): Rh and Rs in comoving kpc/h."""
+    """HODDIES halo array (scripts/run_halo_outputs.py): Rh and Rs in comoving kpc/h."""
     return halo_catalog_dir(target, model, realization, redshift) / HODDIES_ARRAY_NAME
 
 
@@ -122,7 +118,7 @@ def _check_hod_statistic(statistic: str) -> None:
 
 def hod_dir(target: str, model: str, realization: str, redshift: float) -> Path:
     """Folder of the HOD outputs of a run and redshift (scripts/run_hod_mock.py)."""
-    return halo_catalog_dir(target, model, realization, redshift) / f"hod_{HOD_LABEL}"
+    return halo_catalog_dir(target, model, realization, redshift) / "hod"
 
 
 def hod_spectrum_file(target: str, model: str, realization: str, redshift: float, name: str,
@@ -159,14 +155,14 @@ def hicola_hod_spectrum_file(target: str, model: str, realization: str, redshift
                              statistic: str = "PS") -> Path:
     """Kept copy of the P(k) ('PS') or marked P(k) ('MPS') multipoles of a HOD mock."""
     _check_hod_statistic(statistic)
-    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD-{HOD_LABEL}_{name}_{statistic}.txt"
+    file_name = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_{name}_{statistic}.txt"
     return hicola_dir(target, model, realization) / file_name
 
 
 def hod_fit_dir(target: str, model: str, realization: str, redshift: float, fit_name: str) -> Path:
     """Folder of the results of one HOD fit on a run and redshift (jobs/hod_fit.sh, or the
     exploration notebook HOD_fit.ipynb), kept directly in hicola_data next to the run's measurements."""
-    folder = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD-{HOD_LABEL}_fit_{fit_name}"
+    folder = f"HiCOLA_{simulation_name(target, model, realization)}_{zlabel(redshift)}_HOD_fit_{fit_name}"
     return hicola_dir(target, model, realization) / folder
 
 
