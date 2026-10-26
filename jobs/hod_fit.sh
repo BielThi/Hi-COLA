@@ -10,19 +10,21 @@
 #SBATCH --mem-per-cpu=3G
 #SBATCH --time=4:00:00
 #SBATCH --partition=academic
-# Fit of the HOD parameters on the halo catalog of one snapshot of a Hi-COLA run to measured
-# clustering (wp and xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py).
+# Fit of the HOD parameters on the halos of one snapshot of a Hi-COLA run to measured clustering
+# (wp and/or xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py). Uses the
+# halos and member particles of jobs/halo_finder_particles.sh (halo_catalog/halos200c_ptcl_*.npy),
+# for both kinds of satellites.
 # Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD-dev-v2_fit_<name>/,
-# named after what is fitted, e.g. LRG_SHOD_6p_wp+xi02 (tracer, HOD model, number of free
-# parameters, statistics): a new fit of the same thing replaces the earlier results. Shown by
-# Notebooks/HOD_fit_results.ipynb.
+# named after what is fitted: <tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>], the
+# statistics only when not all of wp + xi_0 + xi_2, e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp. A new
+# fit of the same thing replaces the earlier results. Shown by Notebooks/HOD_fit_results.ipynb.
 #
 # Edit the parameters below, then submit it (from any folder):
 #   sbatch ~/dev-v2/Hi-COLA/jobs/hod_fit.sh          (or, from the Hi-COLA folder: sbatch jobs/hod_fit.sh)
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation, relative to the Hi-COLA folder (or absolute), and the snapshot
-# (its halo catalog must exist: jobs/halo_finder.sh)
+# (its halos and particles must exist: jobs/halo_finder_particles.sh)
 RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
 REDSHIFT="0.500"
 
@@ -32,11 +34,15 @@ HOD_PARAM_FILE="Notebooks/HOD_parameter_file_optimizer.yaml"
 TRACER="LRG"
 # Free parameters and their (flat) priors, name:min:max
 PRIORS="M_0:12.5:13.5 M_1:13:14.5 alpha:0.5:1.5 f_sigv:0.5:1.5 log_Mcent:12.4:13.5 sigma_M:0.05:1"
+# Satellites: "particles" = a random member particle of the halo, velocity
+# v_halo + f_sigv (v_particle - v_halo) (the NFW profile for halos with too few stored particles);
+# "nfw" = HODDIES' NFW profile (concentration c, radius Rh), velocity dispersion Vrms x f_sigv
+SATELLITES="particles"
 
 # Data: pycorr estimators, relative to $HICOLA_DATA_ROOT (or absolute)
 DATA_RPPI="DESI_Y1_LRG/allcounts_LRG_GCcomb_0.4_0.6_default_angular_bitwise_log_njack128_nran4_split20_rppi.npy"
 DATA_SMU="DESI_Y1_LRG/allcounts_LRG_GCcomb_0.4_0.6_default_angular_bitwise_log_njack128_nran4_split20_smu.npy"
-STATISTICS="wp xi_ells"   # fitted statistics: wp and/or xi_ells (data vector: wp, then xi_ell for each ell)
+STATISTICS="wp xi_ells"   # fitted statistics: "wp xi_ells" (all), "wp" or "xi_ells"; data vector: wp, then xi_ell per ell
 # wp(rp): rebinning of the rp bins, rp range (bins entirely inside), pi_max [Mpc/h]
 RP_REBIN="2"
 RP_RANGE="0.04 32"        # with the files above: 17 bins, 0.046 to 31.6 Mpc/h
@@ -45,11 +51,12 @@ PIMAX="40"
 ELLS="0 2"
 S_REBIN="1"
 S_RANGE="0.2 32"          # with the files above: 26 bins, 0.215 to 31.6 Mpc/h
-# Covariance = (jackknife errors of the data) x (this correlation matrix of the data vector, e.g.
-# from mocks; relative to $HICOLA_DATA_ROOT or absolute), or "none" for a diagonal covariance
+# Covariance = (jackknife errors of the data) x (a correlation matrix, e.g. from mocks; relative to
+# $HICOLA_DATA_ROOT or absolute), or "none" for a diagonal covariance. CORRELATION_STATISTICS: what
+# the matrix covers, with the bins above (wp, then xi_ell per ell); the blocks of the fitted
+# statistics are used. The wp and xi_ell settings above are needed for all of them, fitted or not.
 CORRELATION="DESI_Y1_LRG/M_corr_lrg_z0.5.txt"
-# Rows (and columns) of that matrix for the fitted data vector: "all", or START:STOP (python slice)
-CORRELATION_ROWS="all"
+CORRELATION_STATISTICS="wp xi_ells"
 
 # Model: line of sight of the redshift-space distortions (box axis); HOD seed of every mock of the
 # fit; extra seeds of the best-fit model (for its mock-to-mock scatter)
@@ -114,12 +121,14 @@ COSMO_ARGS=(--h "$COSMO_H" --omega-cdm "$COSMO_OMEGA_CDM" --omega-b "$COSMO_OMEG
 read -r -a PRIOR_LIST <<< "$PRIORS"
 HOD=(--hod-param-file "$HOD_PARAM_FILE" --tracer "$TRACER" --priors "${PRIOR_LIST[@]}" --nthreads "$NTHREADS")
 read -r -a STATISTIC_LIST <<< "$STATISTICS"
+read -r -a CORRELATION_STATISTIC_LIST <<< "$CORRELATION_STATISTICS"
 read -r -a RP_LIST <<< "$RP_RANGE"
 read -r -a S_LIST <<< "$S_RANGE"
 read -r -a ELL_LIST <<< "$ELLS"
-DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-rows "$CORRELATION_ROWS"
+DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-statistics "${CORRELATION_STATISTIC_LIST[@]}"
       --pimax "$PIMAX" --rp-rebin "$RP_REBIN" --rp-range "${RP_LIST[@]}"
-      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --los "$LOS")
+      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --los "$LOS"
+      --satellites "$SATELLITES")
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
 FIT=(--method "$METHOD" --maxiter "$MAXITER" --popsize "$POPSIZE" --xtol "$XTOL" --start "$START"
      --start-seed "$START_SEED" --mock-seed "$MOCK_SEED" --model-seeds "${MODEL_SEED_LIST[@]}" --reference-param-file "$REFERENCE_PARAM_FILE"
@@ -130,10 +139,11 @@ hicola_print_run "$RUN_FILE"
 echo "Snapshot z:     $REDSHIFT"
 echo "HOD:            $TRACER, $HOD_PARAM_FILE"
 echo "Priors:         $PRIORS"
-echo "Data:           $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $RP_REBIN, pi_max $PIMAX; xi_ell: ells $ELLS, s in [$S_RANGE] Mpc/h, rebin $S_REBIN"
+echo "Satellites:     $SATELLITES"
+echo "Data:           fitted: $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $RP_REBIN, pi_max $PIMAX; xi_ell: ells $ELLS, s in [$S_RANGE] Mpc/h, rebin $S_REBIN"
 echo "                $DATA_RPPI"
 echo "                $DATA_SMU"
-echo "Covariance:     jackknife errors x $CORRELATION (rows $CORRELATION_ROWS)"
+echo "Covariance:     jackknife errors x $CORRELATION (covering $CORRELATION_STATISTICS)"
 echo "Model:          RSD along $LOS, mock seed $MOCK_SEED, extra seeds of the best fit $MODEL_SEEDS"
 echo "Reference HOD:  $REFERENCE_PARAM_FILE"
 echo "Minimizer:      $METHOD, maxiter $MAXITER, popsize $POPSIZE, xtol $XTOL, start $START (seed $START_SEED)"

@@ -4,19 +4,26 @@
 Run by jobs/hod_fit.sh (MPI: one HOD object per rank; the ranks share the evaluations of each
 iteration of the minimizer).
 
-Data:   wp(rp) and the multipoles xi_ell(s) of pycorr two-point estimators (e.g. DESI Y1 LRG),
+Data:   wp(rp) and/or the multipoles xi_ell(s) of pycorr two-point estimators (e.g. DESI Y1 LRG),
         rebinned and restricted to the chosen separation ranges (bins entirely inside them).
-        Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks),
-        or diagonal ("none").
-Model:  HODDIES mocks on the run's halo array, all with the same seed, measured with the bins of
-        the data (pycorr, redshift space along the line of sight with H(z) of the run's cosmology).
-        chi2 as HODDIES' func_stochopy.
+        Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks)
+        covering the statistics --correlation-statistics (its blocks of the fitted ones are
+        used), or diagonal ("none").
+Model:  HODDIES mocks on the halos of jobs/halo_finder_particles.sh (halos200c_ptcl_hoddies.npy,
+        Rh comoving), all with the same seed, measured with the bins of the data (pycorr, redshift
+        space along the line of sight with H(z) of the run's cosmology); chi2 as HODDIES'
+        func_stochopy. Satellites (--satellites):
+          particles  a random member particle of the halo (halos200c_ptcl_particles.npy), velocity
+                     v_halo + f_sigv (v_particle - v_halo); halos with fewer stored particles than
+                     satellites place the rest on the NFW profile (fraction recorded)
+          nfw        HODDIES' NFW profile (Rh, concentration c), velocity dispersion from Vrms x f_sigv
 Fit:    a stochopy minimizer (e.g. cmaes) over the free HOD parameters within their priors; the
         other HOD parameters are those of the HOD parameter file.
 
 Output (hp.hod_fit_dir, kept in hicola_data next to the run's measurements), in a folder named
-after what is fitted: <tracer>_<HOD model>_<n free>p_<statistics>, e.g. LRG_SHOD_6p_wp+xi02 (HODDIES'
-fit model name + the statistics); a new fit of the same thing replaces it:
+after what is fitted: <tracer>_<HOD model>_<n free>p_<satellites>[_<statistics>] (HODDIES' fit model
+name, ptcl or nfw, and the statistics only when not all of wp + xi_0 + xi_2), e.g. LRG_SHOD_6p_ptcl,
+LRG_SHOD_6p_nfw, LRG_SHOD_6p_ptcl_wp; a new fit of the same thing replaces it:
     settings.json              the settings of the fit, the run and the code versions
     <HOD parameter file>.yaml  copy of the HOD parameter file
     data.npz                   the fitted data: separations, values, errors, data vector, covariance
@@ -72,20 +79,23 @@ def parse_args() -> argparse.Namespace:
     hod.add_argument("--nthreads", type=int, required=True, help="HODDIES and pycorr threads per rank (the mock depends on it)")
     data = parser.add_argument_group("data")
     data.add_argument("--statistics", nargs="+", required=True, choices=STATISTICS)
-    data.add_argument("--correlation", required=True, help="correlation matrix file (text) of the data vector, or 'none'")
-    data.add_argument("--correlation-rows", required=True,
-                      help="rows (and columns) of the correlation matrix for the fitted data vector: 'all' or START:STOP")
-    wp = parser.add_argument_group("wp (required when fitting wp)")
+    data.add_argument("--correlation", required=True, help="correlation matrix file (text), or 'none' (diagonal)")
+    data.add_argument("--correlation-statistics", nargs="+", required=True, choices=STATISTICS,
+                      help="statistics covered by the correlation matrix, in this order (wp, then xi_ell for each ell), "
+                           "with the same bins as the data; the blocks of the fitted ones are used")
+    wp = parser.add_argument_group("wp (required when fitting wp or when the correlation matrix covers it)")
     wp.add_argument("--data-rppi", type=Path, help="pycorr estimator in (rp, pi)")
     wp.add_argument("--pimax", type=float)
     wp.add_argument("--rp-rebin", type=int)
     wp.add_argument("--rp-range", type=float, nargs=2, metavar=("MIN", "MAX"))
-    xi = parser.add_argument_group("xi_ell (required when fitting xi_ells)")
+    xi = parser.add_argument_group("xi_ell (required when fitting xi_ells or when the correlation matrix covers it)")
     xi.add_argument("--data-smu", type=Path, help="pycorr estimator in (s, mu)")
     xi.add_argument("--ells", type=int, nargs="+")
     xi.add_argument("--s-rebin", type=int)
     xi.add_argument("--s-range", type=float, nargs=2, metavar=("MIN", "MAX"))
     data.add_argument("--los", required=True, choices=["x", "y", "z"], help="line of sight of the model (box axis)")
+    data.add_argument("--satellites", required=True, choices=["particles", "nfw"],
+                      help="satellites on member particles or on HODDIES' NFW profile")
     fit = parser.add_argument_group("minimizer")
     fit.add_argument("--method", required=True, help="stochopy method, e.g. cmaes, de, pso, cpso, vdcma, na")
     fit.add_argument("--maxiter", type=int, required=True)
@@ -105,17 +115,16 @@ def parse_args() -> argparse.Namespace:
     if len(set(args.statistics)) != len(args.statistics):
         raise SystemExit(f"--statistics has duplicates: {args.statistics}")
     args.statistics = [s for s in STATISTICS if s in args.statistics]  # the order of the data vector
+    args.correlation_statistics = [s for s in STATISTICS if s in args.correlation_statistics]
+    if args.correlation != "none" and not set(args.statistics) <= set(args.correlation_statistics):
+        raise SystemExit(f"The correlation matrix covers {args.correlation_statistics}, not all the fitted {args.statistics}")
+    args.loaded_statistics = [s for s in STATISTICS if s in args.statistics
+                              or (args.correlation != "none" and s in args.correlation_statistics)]
     needed = {"wp": ["data_rppi", "pimax", "rp_rebin", "rp_range"], "xi_ells": ["data_smu", "ells", "s_rebin", "s_range"]}
-    for statistic in args.statistics:
+    for statistic in args.loaded_statistics:
         missing = ["--" + name.replace("_", "-") for name in needed[statistic] if getattr(args, name) is None]
         if missing:
-            raise SystemExit(f"Fitting {statistic} needs {' '.join(missing)}")
-    if args.correlation_rows != "all":
-        try:
-            start, stop = (int(v) for v in args.correlation_rows.split(":"))
-        except ValueError:
-            raise SystemExit(f"--correlation-rows must be 'all' or START:STOP, got {args.correlation_rows!r}")
-        args.correlation_rows = slice(start, stop)
+            raise SystemExit(f"{statistic} (fitted or covered by the correlation matrix) needs {' '.join(missing)}")
     if args.omega_mnu != 0:
         raise SystemExit("Massive neutrinos are not handled in the H(z) of the fit (omega_mnu must be 0)")
     return args
@@ -150,41 +159,43 @@ def select_bins(edges: np.ndarray, separation_range) -> slice:
 
 
 def load_data(args: argparse.Namespace) -> dict:
-    """Data vector (statistics in the order of args.statistics), its parts, covariance and bin edges."""
+    """Data vector (fitted statistics in the order of args.statistics), the measured statistics with
+    their errors and bin edges, and the covariance (block of the fitted statistics)."""
     from pycorr import TwoPointCorrelationFunction
 
     data = {}
-    values, errors = [], []
-    if "wp" in args.statistics:
+    values, errors = {}, {}
+    if "wp" in args.loaded_statistics:
         estimator = TwoPointCorrelationFunction.load(str(args.data_rppi))[::args.rp_rebin]
         estimator = estimator[select_bins(estimator.edges[0], args.rp_range)]
         if args.pimax > estimator.edges[1][-1]:
             raise SystemExit(f"--pimax {args.pimax} beyond the pi edges of the data ({estimator.edges[1][-1]})")
         rp, wp, wp_err = estimator(pimax=args.pimax, return_sep=True, return_std=True)
         data.update(rp=rp, wp=wp, wp_err=wp_err, edges_rp=estimator.edges[0], edges_pi=estimator.edges[1])
-        values.append(wp)
-        errors.append(wp_err)
-    if "xi_ells" in args.statistics:
+        values["wp"], errors["wp"] = wp, wp_err
+    if "xi_ells" in args.loaded_statistics:
         estimator = TwoPointCorrelationFunction.load(str(args.data_smu))[::args.s_rebin]
         estimator = estimator[select_bins(estimator.edges[0], args.s_range)]
         s, xi, cov = estimator.get_corr(ells=tuple(args.ells), return_sep=True, return_cov=True)
         xi_err = np.sqrt(np.diag(cov)).reshape(len(args.ells), -1)
         data.update(s=s, xi=np.asarray(xi), xi_err=xi_err, ells=np.array(args.ells),
                     edges_s=estimator.edges[0], edges_mu=estimator.edges[1])
-        values.append(np.ravel(xi))
-        errors.append(np.ravel(xi_err))
-    data_vec, data_err = np.concatenate(values), np.concatenate(errors)
+        values["xi_ells"], errors["xi_ells"] = np.ravel(xi), np.ravel(xi_err)
+    data_vec = np.concatenate([values[s] for s in args.statistics])
+    data_err = np.concatenate([errors[s] for s in args.statistics])
 
     if args.correlation == "none":
         correlation = np.eye(data_vec.size)
     else:
-        correlation = np.loadtxt(args.correlation)
-        if args.correlation_rows != "all":
-            correlation = correlation[args.correlation_rows, args.correlation_rows]
-        if correlation.shape != (data_vec.size, data_vec.size):
-            raise SystemExit(f"The correlation matrix {args.correlation} (rows {args.correlation_rows}) is {correlation.shape}, "
-                             f"the data vector has {data_vec.size} values ({' + '.join(args.statistics)}): the ranges, "
-                             "rebinning or rows differ")
+        full = np.loadtxt(args.correlation)
+        sizes = {s: values[s].size for s in args.correlation_statistics}
+        if full.shape != (sum(sizes.values()),) * 2:
+            raise SystemExit(f"The correlation matrix {args.correlation} is {full.shape}, but "
+                             f"{' + '.join(f'{s} ({n})' for s, n in sizes.items())} have {sum(sizes.values())} values: "
+                             "the ranges, rebinning or ells differ from those of the matrix")
+        start = dict(zip(sizes, np.cumsum([0] + list(sizes.values()))[:-1]))
+        rows = np.concatenate([np.arange(start[s], start[s] + sizes[s]) for s in args.statistics])
+        correlation = full[np.ix_(rows, rows)]
     data.update(data_vec=data_vec, data_err=data_err, correlation=correlation,
                 cov=np.outer(data_err, data_err) * correlation)
     return data
@@ -223,14 +234,18 @@ def run_cosmology(args: argparse.Namespace):
                      N_eff=args.neff, n_s=args.n_s, m_ncdm=[], engine="class")
 
 
-def build_hod(hoddies: dict, halos: np.ndarray, data: dict, args: argparse.Namespace, verbose: bool):
-    """HOD object of the run with the fit settings: priors, statistics, bins of the data, data and covariance."""
+def build_hod(hoddies: dict, halos: np.ndarray, particles, data: dict, args: argparse.Namespace, verbose: bool):
+    """HOD object of the run with the fit settings: satellites (on the member particles if given),
+    priors, statistics, bins of the data, data and covariance."""
     base_catalog = hoddies["Base_catalogue"](
         {column: halos[column] for column in halos.dtype.names},  # a dict: a structured array is refused
+        particle_data=None if particles is None else {column: particles[column] for column in particles.dtype.names},
         boxsize=args.boxsize, z_simu=args.redshift, nthreads=args.nthreads, setup_logger=verbose,
     )
     hod = hoddies["HOD"](base_catalog, param_file=str(args.hod_param_file), nthreads=args.nthreads,
-                         seed=args.mock_seed, setup_logger=verbose)
+                         seed=args.mock_seed, setup_logger=verbose, use_particles=particles is not None)
+    if (particles is not None) != (hod.args["use_particles"] and hod.part_subsamples is not None):
+        raise SystemExit("HODDIES' use of the particles differs from --satellites")
     if hod.nthreads != args.nthreads:
         raise SystemExit(f"HODDIES uses {hod.nthreads} threads instead of {args.nthreads} (capped by numba's "
                          "thread count, NUMBA_NUM_THREADS); the mocks depend on it")
@@ -260,11 +275,18 @@ def build_hod(hoddies: dict, halos: np.ndarray, data: dict, args: argparse.Names
     return hod
 
 
+FULL_STATISTICS = (["wp", "xi_ells"], [0, 2])  # fits of all of wp + xi_0 + xi_2 have no statistics in their name
+
+
 def fit_name(hod, args: argparse.Namespace) -> str:
     """Name of the fit from what is fitted: HODDIES' fit model name (tracer, HOD model, extensions,
-    number of free parameters) and the statistics, e.g. LRG_SHOD_6p_wp+xi02."""
-    labels = ["wp" if s == "wp" else "xi" + "".join(str(ell) for ell in args.ells) for s in args.statistics]
-    return f"{hod.fit_model_name}_{'+'.join(labels)}"
+    number of free parameters), the satellites (ptcl or nfw) and, unless all of wp + xi_0 + xi_2
+    are fitted, the statistics: e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp."""
+    name = f"{hod.fit_model_name}_{'ptcl' if args.satellites == 'particles' else 'nfw'}"
+    if (args.statistics, args.ells if "xi_ells" in args.statistics else None) != FULL_STATISTICS:
+        labels = ["wp" if s == "wp" else "xi" + "".join(str(ell) for ell in args.ells) for s in args.statistics]
+        name += "_" + "+".join(labels)
+    return name
 
 
 class Objective:
@@ -353,9 +375,15 @@ def same_hod_value(key: str, a, b) -> bool:
 def model_statistics(hod, hoddies: dict, args: argparse.Namespace) -> dict:
     """Model statistics at the current HOD for the fit seed and the extra seeds, chi2, and the HOD occupation."""
     model = {"seeds": np.array([args.mock_seed, *args.model_seeds])}
-    vectors, n_gal, n_cen = [], [], []
+    vectors, n_gal, n_cen, nfw = [], [], [], []
+    particles = hod.args["use_particles"] and hod.part_subsamples is not None
+    if particles:
+        stored = np.bincount(np.asarray(hod.part_subsamples["halo_id"]), minlength=len(hod.hcat["halo_id"]))
     for seed in model["seeds"]:
         cat = hod.make_mock_cat(fix_seed=int(seed), verbose=False)
+        hosts = np.asarray(cat["halo_id"])[np.asarray(cat["Central"]) == 0]
+        if particles and hosts.size:  # satellites beyond the stored particles of their halo go on the NFW profile
+            nfw.append(np.maximum(np.bincount(hosts, minlength=stored.size) - stored, 0).sum() / hosts.size)
         stats = hod.compute_stats(cat, stat=hod._stats_to_fit, tracers=hod._tracer_to_fit, verbose=False)
         vectors.append(hoddies["flatten_stats"](stats, hod._stats_to_fit, hod._comb_tr_list))
         n_gal.append(cat.size)
@@ -366,7 +394,8 @@ def model_statistics(hod, hoddies: dict, args: argparse.Namespace) -> dict:
                 model["rp"] = np.asarray(stats["wp"][pair][0])
             if "xi_ells" in stats:
                 model["s"] = np.asarray(stats["xi_ells"][pair][0])
-    model.update(model_vec=np.array(vectors), n_gal=np.array(n_gal), n_cen=np.array(n_cen))
+    model.update(model_vec=np.array(vectors), n_gal=np.array(n_gal), n_cen=np.array(n_cen),
+                 sat_nfw_fraction=np.array(nfw))
     model["chi2"] = np.array([hoddies["compute_chi2"](v, hod.data, hod.inv_cov2) for v in vectors])
     model["log_mass"] = np.linspace(11.0, 15.5, 200)
     model["n_cen_hod"], model["n_sat_hod"] = hod_occupation(hod, args.tracer, model["log_mass"])
@@ -392,13 +421,18 @@ def main() -> int:
 
     run = (args.target, args.model, args.realization, args.redshift)
     hoddies = import_hoddies()
-    halo_array = hp.hoddies_catalog_file(*run)
-    catalog_file = hp.halo_catalog_file(*run)
+    # Halos (and member particles) of jobs/halo_finder_particles.sh, for both kinds of satellites
+    halo_array = hp.ptcl_hoddies_file(*run)
+    catalog_file = hp.ptcl_halo_catalog_file(*run)
+    particle_file = hp.ptcl_particles_file(*run) if args.satellites == "particles" else None
 
     # Checks, data and output folder on rank 0, then shared
     problem, data = None, None
     if root:
         try:
+            missing = [f for f in (halo_array, particle_file) if f is not None and not f.exists()]
+            if missing:
+                raise SystemExit(f"Missing {', '.join(map(str, missing))}: run jobs/halo_finder_particles.sh on this run and redshift")
             metadata = load_catalog_metadata(catalog_file)
             require_peculiar_velocities(metadata, catalog_file)
             if "boxsize" in metadata and not np.isclose(float(metadata["boxsize"]), args.boxsize):
@@ -416,12 +450,17 @@ def main() -> int:
 
     say(f"HODDIES:        {hoddies['file']} ({hoddies['version']})")
     say(f"Halos:          {halo_array}")
+    particle_info = json.loads(Path(str(particle_file) + ".json").read_text()) if particle_file else None
+    say(f"Satellites:     {args.satellites}" + (f", {particle_file} ({particle_info['particles']:,} particles, "
+                                                 f"fraction {particle_info['particle_fraction']})" if particle_file else ""))
     say(f"Data vector:    {data['data_vec'].size} values ({' + '.join(args.statistics)})"
         + (f", wp: {data['rp'].size} rp bins {data['edges_rp'][0]:.4g}-{data['edges_rp'][-1]:.4g} Mpc/h" if "wp" in data else "")
         + (f", xi_ell: {data['s'].size} s bins {data['edges_s'][0]:.4g}-{data['edges_s'][-1]:.4g} Mpc/h" if "s" in data else ""))
 
     halos = np.load(halo_array)
-    hod = build_hod(hoddies, halos, data, args, verbose=root)
+    particles = np.load(particle_file) if particle_file else None
+    hod = build_hod(hoddies, halos, particles, data, args, verbose=root)
+    del particles
     name = fit_name(hod, args)
     fit_dir = hp.hod_fit_dir(*run, name)
     hod.args["fit_param"]["dir_output_fit"] = str(fit_dir)
@@ -452,13 +491,15 @@ def main() -> int:
         settings = {
             "fit_name": name, "run": hp.simulation_name(args.target, args.model, args.realization),
             "target": args.target, "model": args.model, "realization": args.realization,
-            "redshift": args.redshift, "boxsize": args.boxsize, "halo_catalog": str(halo_array),
+            "redshift": args.redshift, "boxsize": args.boxsize, "halo_catalog": str(halo_array), "satellites": args.satellites,
+            "particles": {"file": str(particle_file), "fraction": particle_info["particle_fraction"],
+                          "seed": particle_info["particle_seed"], "n": particle_info["particles"]} if particle_file else None,
             "cosmology": {"h": args.h, "Omega_cdm": args.omega_cdm, "Omega_b": args.omega_b, "T_cmb": args.tcmb,
                           "N_eff": args.neff, "n_s": args.n_s, "efunc": float(hod.cosmo.efunc(args.redshift))},
             "hod_param_file": args.hod_param_file.name, "tracer": args.tracer,
             "hod_parameters": hod.args[args.tracer], "priors": args.priors,
             "data": {"statistics": args.statistics, "rppi": str(args.data_rppi), "smu": str(args.data_smu),
-                     "correlation": args.correlation, "correlation_rows": str(args.correlation_rows),
+                     "correlation": args.correlation, "correlation_statistics": args.correlation_statistics,
                      "pimax": args.pimax, "rp_rebin": args.rp_rebin,
                      "rp_range": args.rp_range, "ells": args.ells, "s_rebin": args.s_rebin,
                      "s_range": args.s_range, "n_data": int(data["data_vec"].size)},
@@ -521,6 +562,7 @@ def main() -> int:
             "p_value": float(scipy_stats.chi2.sf(best_chi2, n_data - n_free)),
             "n_galaxies": int(model["n_gal"][0]), "number_density": float(model["n_gal"][0] / args.boxsize**3),
             "satellite_fraction": float(1 - model["n_cen"][0] / model["n_gal"][0]),
+            "sat_nfw_fraction": float(model["sat_nfw_fraction"][0]) if model["sat_nfw_fraction"].size else None,
             "minimizer": {"success": bool(result.success), "status": int(result.status), "message": result.message,
                           "nit": int(result.nit), "nfev": int(result.nfev), "failed_evaluations": int(failed),
                           "last_iteration_best": {"chi2": float(result.fun),
@@ -551,7 +593,9 @@ def main() -> int:
             f"(recomputed {model['chi2'][0]:.3f}; extra seeds {np.round(model['chi2'][1:], 1).tolist()})")
         say(f"Parameters:     {json.dumps(best['parameters'])}")
         say(f"Galaxies:       {best['n_galaxies']:,}, n = {best['number_density']:.3e} (h/Mpc)^3, "
-            f"satellite fraction {best['satellite_fraction']:.3f}")
+            f"satellite fraction {best['satellite_fraction']:.3f}"
+            + (f", of which {best['sat_nfw_fraction']:.1%} on the NFW profile (too few stored particles)"
+               if best["sat_nfw_fraction"] is not None else ""))
         say(f"Saved:          {fit_dir}")
     return 0
 
