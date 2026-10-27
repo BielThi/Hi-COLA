@@ -6,7 +6,7 @@ for example:
 
     srun -n 72 python scripts/run_halo_catalog.py --target Abacus_Small --model LCDM \
         --realization s1234 --redshift 0.5 --boxsize 500 --linking-length 0.2 --nmin 50 \
-        --radius-mdef 200c --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 --omega-lambda 0.684808 \
+        --radius-mdef vir --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 --omega-lambda 0.684808 \
         --tcmb 2.726 --neff 3.046 --n-s 0.9649
 
 All halo settings and the cosmology (taken from the run file by jobs/halo_finder.sh) are given
@@ -51,9 +51,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boxsize", type=float, required=True, help="Mpc/h")
     parser.add_argument("--linking-length", type=float, required=True, help="in units of the mean particle separation")
     parser.add_argument("--nmin", type=int, required=True, help="minimum number of particles per halo")
-    parser.add_argument("--radius-mdef", required=True, choices=["200c"],
+    parser.add_argument("--radius-mdef", required=True, choices=["vir"],
                         help="mass definition assumed for the FoF mass when nbodykit derives the halo radius and "
-                             "concentration (the r200c and c fields); only 200c")
+                             "concentration (fields r_halo, c); only vir, the definition of nbodykit's (halotools') "
+                             "Dutton & Maccio 2014 concentration, which ignores mdef")
     parser.add_argument("--particle-type", type=int, default=1, help="Gadget particle type of the dark matter")
     parser.add_argument("--particle-fraction", type=float, required=True,
                         help="fraction of the member particles kept (random, the same in every halo); 0 = none")
@@ -175,7 +176,7 @@ def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray
         ("vz", "f8"),
         ("m_fof", "f8"),
         ("log10_m_fof", "f8"),
-        ("r200c", "f8"),
+        ("r_halo", "f8"),
         ("rs", "f8"),
         ("c", "f8"),
         ("vrms", "f8"),
@@ -192,9 +193,9 @@ def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray
     arr["vx"], arr["vy"], arr["vz"] = velocity.T
     arr["m_fof"] = mass  # FoF mass: length x particle mass
     arr["log10_m_fof"] = np.log10(mass)
-    arr["r200c"] = 1000.0 * radius  # nbodykit: radius of 200 rho_crit for a halo of mass m_fof (physical)
+    arr["r_halo"] = 1000.0 * radius  # nbodykit: radius of a halo of mass m_fof for --radius-mdef (physical)
     arr["c"] = concentration
-    arr["rs"] = arr["r200c"] / concentration
+    arr["rs"] = arr["r_halo"] / concentration
     arr["vrms"] = vrms
     arr["length"] = length
     return arr

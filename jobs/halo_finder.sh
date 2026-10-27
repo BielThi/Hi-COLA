@@ -26,7 +26,7 @@ REDSHIFT="0.500"
 # FoF / halo definition
 LINKING_LENGTH="0.2"   # in units of the mean particle separation
 NMIN="50"              # minimum particles per halo; so far 30 for COLA_NM4096 runs, 50 for Abacus_Small runs
-RADIUS_MDEF="200c"     # mass definition assumed for the FoF mass when deriving the halo radius and concentration (fields r200c, c); only 200c for now
+RADIUS_MDEF="vir"      # mass definition assumed for the FoF mass when deriving the halo radius and concentration (fields r_halo, c); only vir: nbodykit's concentration (Dutton & Maccio 2014) is the virial one
 
 # Member particles kept for HODDIES' satellites on particles: random fraction of every halo's
 # particles ("0" = none) and the seed of the draw. 10% keeps ~100 particles in a 1e13 Msun/h halo

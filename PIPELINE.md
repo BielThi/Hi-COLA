@@ -248,7 +248,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 | `REDSHIFT` | 1.650, 1.400, 1.200, 1.000 | 1.100, 0.800, 0.500 (reference at 0.500 only) |
 | `LINKING_LENGTH` | 0.2 | 0.2 |
 | `NMIN` | 30 | 50 |
-| `RADIUS_MDEF` | 200c | 200c |
+| `RADIUS_MDEF` | vir | vir |
 | `HMF_MASS_GRID` | `reference` (Bart's bins) | `1e11 1e16 60` |
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
@@ -276,7 +276,8 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   mass); `RADIUS_MDEF` is only the mass definition assumed when nbodykit derives each halo's radius and
   concentration from that mass (section 8). The box size and the
   cosmology used for the masses (h, Ω_cdm, Ω_b, Ω_ν, Ω_Λ, T_CMB, N_eff, n_s) are read from the
-  run file. Only `RADIUS_MDEF=200c` is accepted (the radius field is `r200c`).
+  run file. Only `RADIUS_MDEF=vir` is accepted: nbodykit's concentration (halotools' Dutton & Macciò
+  2014) is the virial one whatever the mass definition, so only `vir` gives a matching radius.
 - **HMF** (`scripts/run_halo_outputs.py`): cumulative n(>M) and dn/dlog10M with Poisson
   errors. `HMF_MASS_GRID` is `reference` (the masses of the target's Box1 LCDM reference HMF at
   the same redshift, so both compare bin by bin; stops with an error if there is none) or
@@ -340,10 +341,12 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   σ_n(>M), dn/dlog10M, σ, counts(>M), counts per bin. A `.json` next to a file holds its
   metadata (run, settings, cosmology, mass grid source).
 - **Halo catalog** `halos_fof_catalog.npy`: structured array with `x y z` [Mpc/h], `vx vy vz`
-  and `vrms` [peculiar km/s], `m_fof`, `log10_m_fof` [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
+  and `vrms` [peculiar km/s], `m_fof`, `log10_m_fof` [Msun/h], `r_halo`, `rs` [kpc/h], `c`, `length`
   (FoF particles), `halo_id`. `m_fof` = `length` × particle mass, the FoF mass (b = 0.2, roughly
-  M200m); `r200c` (physical) and `c` (Dutton & Macciò 2014 c(M)) are derived by nbodykit from `m_fof`
-  as if it were M200c, so they are not those of a spherical-overdensity M200c either; `.json` with box size, redshift, FoF settings, particle mass,
+  M200m); `r_halo` (physical virial radius, Bryan & Norman Δ_vir, about 230 × the mean density at
+  z = 0.5) and `c` (Dutton & Macciò 2014 virial c(M)), `rs = r_halo / c`, are derived by nbodykit
+  from `m_fof` taken as a virial mass (`radius_mdef: "vir"` in the `.json`): a consistent NFW halo of
+  that mass, used only by satellites on the NFW profile; `.json` with box size, redshift, FoF settings, particle mass,
   cosmology and `velocity_definition: "peculiar"`. Hi-COLA's Gadget snapshots store v_pec/√a;
   the halo finder multiplies by √a (checking a against the snapshot header). Catalogs without
   `velocity_definition` were made before this fix (2026-10-14) and have velocities too large by
@@ -351,8 +354,8 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   halo finder.
 - **HODDIES array** `halos_fof_hoddies.npy` (`scripts/run_halo_outputs.py`):
   `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id` (peculiar velocities), `Mh` = `m_fof`, with `Rh`, `Rs` in
-  **comoving** kpc/h: nbodykit's `r200c` is physical, HODDIES places satellites in comoving units
-  (like Abacus' comoving `r98`), so `Rh = r200c (1+z)`. Arrays made before 2026-10-26 had the physical radii (satellites 1+z
+  **comoving** kpc/h: nbodykit's radius is physical, HODDIES places satellites in comoving units
+  (like Abacus' comoving `r98`), so `Rh = r_halo (1+z)`. Arrays made before 2026-10-26 had the physical radii (satellites 1+z
   too close to their halo's centre).
 - **Member particles** `halos_fof_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
   a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
@@ -546,10 +549,11 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
   `HiCOLA/Output/` on jed.
 - Halo masses are FoF masses (b = 0.2, roughly M200m), while the COLA_NM4096 reference HMF is
   spherical-overdensity with an unstated Δ and the Abacus_Small one CompaSO (SO at about 200 × the
-  mean density): the mass definitions differ, less so for Abacus. The halo radius and
-  concentration are derived from the FoF mass as if it were M200c (section 8), which only matters
-  for HOD satellites placed on the NFW profile. (Until 2026-10-27 the FoF mass was named `m200c`
-  and the files `halos200c_*`; existing catalogs were renamed, their content is unchanged.)
+  mean density): the mass definitions differ, less so for Abacus. (Until 2026-10-27 the FoF mass
+  was named `m200c` and the files `halos200c_*`, and the radius was `r200c` paired with the virial
+  concentration, an inconsistent NFW halo; the existing catalogs were renamed and their radius and
+  concentration recomputed as virial (section 8). This changes only satellites on the NFW profile:
+  mocks with particles are bit-for-bit the same.)
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History

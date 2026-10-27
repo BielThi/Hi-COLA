@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
 
-The HODDIES array is halos_fof_hoddies.npy, with Rh and Rs in comoving kpc/h (nbodykit's r200c is
+The HODDIES array is halos_fof_hoddies.npy, with Rh and Rs in comoving kpc/h (nbodykit's radius is
 physical).
 
 The HMF mass grid is chosen with --mass-grid:
@@ -86,7 +86,7 @@ def main() -> int:
                 "schema": "HODDIES halo array",
                 "mass_units": "Msun/h",
                 "mass_definition": "Mh = FoF mass (length x particle mass)",
-                "radius_units": "kpc/h comoving (nbodykit's physical r200c x (1+z), r200c derived from the FoF mass as if it were M200c)",
+                "radius_units": "kpc/h comoving (nbodykit's physical r_halo x (1+z); r_halo and c derived from the FoF mass as a virial mass)",
                 "position_units": "Mpc/h",
                 "velocity_units": "km/s",
                 "velocity_definition": VELOCITY_DEFINITION,

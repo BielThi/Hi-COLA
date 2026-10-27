@@ -16,7 +16,7 @@ HALO_CATALOG_FIELDS = (
     "vz",
     "m_fof",
     "log10_m_fof",
-    "r200c",
+    "r_halo",
     "rs",
     "c",
     "vrms",
@@ -70,12 +70,12 @@ def validate_halo_catalog(catalog: np.ndarray, *, boxsize: float | None = None) 
         raise ValueError("Halo catalog contains non-positive m_fof values")
     if not np.allclose(catalog["log10_m_fof"], np.log10(catalog["m_fof"]), rtol=1.0e-12, atol=1.0e-12):
         raise ValueError("log10_m_fof is inconsistent with m_fof")
-    if np.any(catalog["r200c"] <= 0.0):
-        raise ValueError("Halo catalog contains non-positive r200c values")
+    if np.any(catalog["r_halo"] <= 0.0):
+        raise ValueError("Halo catalog contains non-positive r_halo values")
     if np.any(catalog["rs"] <= 0.0):
         raise ValueError("Halo catalog contains non-positive rs values")
-    if not np.allclose(catalog["rs"], catalog["r200c"] / catalog["c"], rtol=1.0e-12, atol=1.0e-12):
-        raise ValueError("rs is inconsistent with r200c / c")
+    if not np.allclose(catalog["rs"], catalog["r_halo"] / catalog["c"], rtol=1.0e-12, atol=1.0e-12):
+        raise ValueError("rs is inconsistent with r_halo / c")
     if np.any(catalog["vrms"] < 0.0):
         raise ValueError("Halo catalog contains negative vrms values")
     if np.any(catalog["length"] <= 0):
@@ -89,19 +89,20 @@ def validate_halo_catalog(catalog: np.ndarray, *, boxsize: float | None = None) 
 
 
 def halo_catalog_to_hoddies(catalog: np.ndarray, redshift: float) -> np.ndarray:
-    """HODDIES halo array of a halo catalog: Mh = the FoF mass, Rh = r200c and c derived from it by
-    nbodykit as if it were M200c. HODDIES places satellites in comoving coordinates (as with Abacus'
-    comoving r98), while nbodykit's r200c is physical: Rh and Rs are converted to comoving kpc/h."""
+    """HODDIES halo array of a halo catalog: Mh = the FoF mass, Rh = r_halo and c derived from it by
+    nbodykit (as a virial mass, the catalog's radius_mdef). HODDIES places satellites in comoving
+    coordinates (as with Abacus' comoving r98), while nbodykit's radius is physical: Rh and Rs are
+    converted to comoving kpc/h."""
     require_fields(
         catalog,
-        ["x", "y", "z", "vx", "vy", "vz", "m_fof", "log10_m_fof", "r200c", "rs", "c", "vrms", "halo_id"],
+        ["x", "y", "z", "vx", "vy", "vz", "m_fof", "log10_m_fof", "r_halo", "rs", "c", "vrms", "halo_id"],
     )
     arr = np.empty(len(catalog), dtype=HODDIES_DTYPE)
     for field in ["x", "y", "z", "vx", "vy", "vz", "c", "halo_id"]:
         arr[field] = catalog[field]
     arr["Mh"] = catalog["m_fof"]
     arr["log10_Mh"] = catalog["log10_m_fof"]
-    arr["Rh"] = catalog["r200c"] * (1 + redshift)
+    arr["Rh"] = catalog["r_halo"] * (1 + redshift)
     arr["Rs"] = catalog["rs"] * (1 + redshift)
     arr["Vrms"] = catalog["vrms"]
     return arr
