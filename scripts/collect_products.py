@@ -4,7 +4,7 @@
 For every snapshot_<simulation_name>_z<z>/ of the run it copies, when present:
 
     pofk_z<z>.txt                    -> HiCOLA_<simulation_name>_z<z>_PS.txt
-    halo_catalog/halos200c_hmf.txt   -> HiCOLA_<simulation_name>_z<z>_HMF.txt   (+ .json)
+    halo_catalog/halos_fof_hmf.txt   -> HiCOLA_<simulation_name>_z<z>_HMF.txt   (+ .json)
     halo_catalog/hod/<name>_PS.txt   -> HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt   (+ .h5, .json)
     halo_catalog/hod/<name>_MPS.txt  -> HiCOLA_<simulation_name>_z<z>_HOD_<name>_MPS.txt  (+ .h5, .json)
 

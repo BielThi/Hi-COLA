@@ -5,7 +5,7 @@ matter power spectra, halo mass functions and HOD galaxies:
 
 ```
 frontend (optional)      backend (Hi-COLA)          halo finder (nbodykit)       analysis (notebooks)
-.ini → expansion/force   run .lua → snapshots,      FoF → M200c halo catalog →   P(k), HMF vs reference,
+.ini → expansion/force   run .lua → snapshots,      FoF → halo catalog (FoF M) →  P(k), HMF vs reference,
 tables (HiCOLA/Output)   P(k) at each output z      HMF + HODDIES halo array     HOD / LRG mocks
 ```
 
@@ -208,10 +208,10 @@ snapshot_<simulation_name>_z<z>/           one per output redshift
 ├── gadget_z<z>.*                          particles (Gadget format, one file per MPI task)
 ├── pofk_z<z>.txt                          P(k) of the snapshot: this is the "PS" that is kept
 └── halo_catalog/                          written by the halo finder
-    ├── halos200c_catalog.npy (+ .json)    FoF halos with M200c (section 8)
-    ├── halos200c_hmf.txt (+ .json)        HMF: this is the "HMF" that is kept
-    ├── halos200c_hoddies.npy (+ .json)    the same halos in HODDIES' format (Rh comoving)
-    ├── halos200c_particles.npy (+ .json)  member particles, with PARTICLE_FRACTION > 0
+    ├── halos_fof_catalog.npy (+ .json)    FoF halos with their FoF masses (section 8)
+    ├── halos_fof_hmf.txt (+ .json)        HMF: this is the "HMF" that is kept
+    ├── halos_fof_hoddies.npy (+ .json)    the same halos in HODDIES' format (Rh comoving)
+    ├── halos_fof_particles.npy (+ .json)  member particles, with PARTICLE_FRACTION > 0
     └── hod/                               HOD mock P(k) and marked P(k) (jobs/hod_mock.sh)
 ```
 
@@ -247,7 +247,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 | `REDSHIFT` | 1.650, 1.400, 1.200, 1.000 | 1.100, 0.800, 0.500 (reference at 0.500 only) |
 | `LINKING_LENGTH` | 0.2 | 0.2 |
 | `NMIN` | 30 | 50 |
-| `MDEF` | 200c | 200c |
+| `RADIUS_MDEF` | 200c | 200c |
 | `HMF_MASS_GRID` | `reference` (Bart's bins) | `1e11 1e16 60` |
 
 - The halo finder processes one redshift per job; edit `REDSHIFT` and submit again for the others.
@@ -271,9 +271,11 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 ## 7. Halo finder and measurements
 
 - **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI via `srun --mpi=pmix`): linking
-  length, minimum members and mass definition from `halo_finder.sh`. The box size and the
+  length and minimum members from `halo_finder.sh`. Halo masses are FoF masses (members × particle
+  mass); `RADIUS_MDEF` is only the mass definition assumed when nbodykit derives each halo's radius and
+  concentration from that mass (section 8). The box size and the
   cosmology used for the masses (h, Ω_cdm, Ω_b, Ω_ν, Ω_Λ, T_CMB, N_eff, n_s) are read from the
-  run file. Only `MDEF=200c` is accepted: the catalog fields and files are named for it.
+  run file. Only `RADIUS_MDEF=200c` is accepted (the radius field is `r200c`).
 - **HMF** (`scripts/run_halo_outputs.py`): cumulative n(>M) and dn/dlog10M with Poisson
   errors. `HMF_MASS_GRID` is `reference` (the masses of the target's Box1 LCDM reference HMF at
   the same redshift, so both compare bin by bin; stops with an error if there is none) or
@@ -331,20 +333,22 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 - **HMF files**: text, `#` header, columns M [Msun/h], n(>M) [h³/Mpc³]; Hi-COLA HMFs add
   σ_n(>M), dn/dlog10M, σ, counts(>M), counts per bin. A `.json` next to a file holds its
   metadata (run, settings, cosmology, mass grid source).
-- **Halo catalog** `halos200c_catalog.npy`: structured array with `x y z` [Mpc/h], `vx vy vz`
-  and `vrms` [peculiar km/s], `m200c`, `log10_m200c` [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
-  (FoF particles), `halo_id`; `.json` with box size, redshift, FoF settings, particle mass,
+- **Halo catalog** `halos_fof_catalog.npy`: structured array with `x y z` [Mpc/h], `vx vy vz`
+  and `vrms` [peculiar km/s], `m_fof`, `log10_m_fof` [Msun/h], `r200c`, `rs` [kpc/h], `c`, `length`
+  (FoF particles), `halo_id`. `m_fof` = `length` × particle mass, the FoF mass (b = 0.2, roughly
+  M200m); `r200c` (physical) and `c` (Dutton & Macciò 2014 c(M)) are derived by nbodykit from `m_fof`
+  as if it were M200c, so they are not those of a spherical-overdensity M200c either; `.json` with box size, redshift, FoF settings, particle mass,
   cosmology and `velocity_definition: "peculiar"`. Hi-COLA's Gadget snapshots store v_pec/√a;
   the halo finder multiplies by √a (checking a against the snapshot header). Catalogs without
   `velocity_definition` were made before this fix (2026-10-14) and have velocities too large by
   √(1+z): the halo outputs, the HOD-mock job and the HOD/LRG notebooks refuse them; rerun the
   halo finder.
-- **HODDIES array** `halos200c_hoddies.npy` (`scripts/run_halo_outputs.py`):
-  `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id` (peculiar velocities), with `Rh`, `Rs` in
+- **HODDIES array** `halos_fof_hoddies.npy` (`scripts/run_halo_outputs.py`):
+  `x y z vx vy vz Mh log10_Mh Rh Rs c Vrms halo_id` (peculiar velocities), `Mh` = `m_fof`, with `Rh`, `Rs` in
   **comoving** kpc/h: nbodykit's `r200c` is physical, HODDIES places satellites in comoving units
   (like Abacus' comoving `r98`), so `Rh = r200c (1+z)`. Arrays made before 2026-10-26 had the physical radii (satellites 1+z
   too close to their halo's centre).
-- **Member particles** `halos200c_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
+- **Member particles** `halos_fof_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
   a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
   halo, `x y z` [Mpc/h], `vx vy vz` [peculiar km/s], `halo_id` = row of the halo catalog of the same
   FoF (= FoF label − 1; checked against the halo masses). A halo finder run without particles
@@ -371,7 +375,7 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   range only when `FIT_R_MIN` or `FIT_R_MAX` is set), e.g. `LRG_SHOD_6p_ptcl`, `LRG_SHOD_6p_nfw`,
   `LRG_SHOD_6p_ptcl_wp`, `LRG_SHOD_6p_ptcl_r0.1-10`, `LRG_SHOD_6p_ptcl_rmin-10`; a new fit of the same thing replaces the folder (the
   settings of each fit are in its `settings.json`). Satellites (`SATELLITES`): `particles` = a
-  random member particle of the halo (`halos200c_particles.npy`), velocity
+  random member particle of the halo (`halos_fof_particles.npy`), velocity
   v_halo + f_sigv (v_particle − v_halo), the NFW profile for the satellites beyond the stored
   particles of their halo (fraction in `best_fit.json`, `sat_nfw_fraction`); `nfw` = HODDIES' NFW
   profile (Rh, c), velocity dispersion Vrms f_sigv. `CORRELATION_STATISTICS` says what the
@@ -524,7 +528,7 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 | `--mass-grid reference: there is no reference HMF` | `HMF_MASS_GRID="reference"` for a target/redshift without reference HMF; use `MIN MAX N` |
 | sbatch: `exceeds MaxMemPerCPU` | more than 7000 MB per core requested; lower `--mem-per-cpu`/`--mem` or add cores |
 | notebook: "Skipping … No PS for …" | the run (or that redshift) doesn't exist on scratch nor in `hicola_data/hicola/` |
-| HOD notebook or job: missing `halos200c_hoddies.npy` (or `halos200c_particles.npy`) | run the halo finder on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
+| HOD notebook or job: missing `halos_fof_hoddies.npy` (or `halos_fof_particles.npy`) | run the halo finder on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
 | `CondaError: Run 'conda init'` | conda not found as a shell function; `jobs/hicola_env.sh` looks in `$CONDA_EXE`, the PATH, `~/miniconda3`, `~/anaconda3` |
 
 ## 14. Known issues
@@ -534,15 +538,11 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 - `Frontend_parameter_files/nDGP/nDGP.ini` does not run (`Hubble0 = '1.0/Hubble_dS'` is not a
   number). The nDGP tables used by `standalone/nDGP_action.lua` exist only in
   `HiCOLA/Output/` on jed.
-- The COLA_NM4096 reference HMF is spherical-overdensity with an unstated Δ; Hi-COLA HMFs use
-  FoF masses (next item), so the two mass definitions differ.
-- **To correct later: "M200c" in the halo catalogs is the FoF mass.** `m200c` (and HODDIES `Mh`)
-  is `length` × particle mass (b = 0.2), not a spherical-overdensity M200c: nbodykit's
-  `to_halos(mdef='200c')` uses `mdef` only to derive `r200c` and `c` (Dutton & Macciò 2014
-  c(M)) from that mass. So the field names, the `"mdef": "200c"` metadata, the `halos200c_*`
-  file names and "M200c" in this file and `hicola_data/README.md` are misleading. FoF b = 0.2
-  masses are roughly M200m. Fix: rename/relabel (e.g. `m_fof`), or compute true SO masses
-  around the FoF centres; then revisit HMF comparisons with SO references.
+- Halo masses are FoF masses (b = 0.2, roughly M200m), while the COLA_NM4096 reference HMF is
+  spherical-overdensity with an unstated Δ: the two mass definitions differ. The halo radius and
+  concentration are derived from the FoF mass as if it were M200c (section 8), which only matters
+  for HOD satellites placed on the NFW profile. (Until 2026-10-27 the FoF mass was named `m200c`
+  and the files `halos200c_*`; existing catalogs were renamed, their content is unchanged.)
 - Abacus_Small has no reference HMF yet.
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 

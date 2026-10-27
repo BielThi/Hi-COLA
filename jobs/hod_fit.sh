@@ -12,8 +12,8 @@
 #SBATCH --partition=academic
 # Fit of the HOD parameters on the halos of one snapshot of a Hi-COLA run to measured clustering
 # (wp and/or xi_ell), with HODDIES mocks and a stochopy minimizer (scripts/run_hod_fit.py). Uses the
-# halos of jobs/halo_finder.sh (halos200c_hoddies.npy) and, for SATELLITES="particles", its
-# member particles (halos200c_particles.npy, PARTICLE_FRACTION > 0 in the halo finder).
+# halos of jobs/halo_finder.sh (halos_fof_hoddies.npy) and, for SATELLITES="particles", its
+# member particles (halos_fof_particles.npy, PARTICLE_FRACTION > 0 in the halo finder).
 # Results in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/HiCOLA_<sim>_z<z>_HOD_fit_<name>/,
 # named after what is fitted: <tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>], the
 # statistics only when not all of wp + xi_0 + xi_2, and _r<min>-<max> when the fit range is

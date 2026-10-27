@@ -99,12 +99,11 @@ def load_haloes(path):
       * numpy .npz with arrays 'pos' and 'mass'
       * ROCKSTAR ascii:  d = np.loadtxt(path); pos = d[:, 8:11]; mass = d[:, 2]  (check the columns)
       * AHF / HODDIES halo files: read x, y, z and M200m
-      * Hi-COLA halos200c_catalog.npy: structured array with x, y, z, m200c.
-        Despite its name, m200c is the FoF mass (length * particle mass, b = 0.2),
-        taken here as ~M200m to match R200m"""
+      * Hi-COLA halos_fof_catalog.npy: structured array with x, y, z, m_fof.
+        m_fof is the FoF mass (length * particle mass, b = 0.2), taken here as ~M200m to match R200m"""
     d = np.load(path)
     if path.endswith(".npy"):
-        return np.c_[d["x"], d["y"], d["z"]].astype(np.float32), d["m200c"].astype(np.float64)
+        return np.c_[d["x"], d["y"], d["z"]].astype(np.float32), d["m_fof"].astype(np.float64)
     return d["pos"].astype(np.float32), d["mass"].astype(np.float64)
 
 

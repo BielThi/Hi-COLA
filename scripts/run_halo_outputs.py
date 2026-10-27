@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the HMF and the HODDIES halo array from a halo catalog made by run_halo_catalog.py.
 
-The HODDIES array is halos200c_hoddies.npy, with Rh and Rs in comoving kpc/h (nbodykit's r200c is
+The HODDIES array is halos_fof_hoddies.npy, with Rh and Rs in comoving kpc/h (nbodykit's r200c is
 physical).
 
 The HMF mass grid is chosen with --mass-grid:
@@ -34,7 +34,7 @@ def default_hoddies_output(halo_catalog: Path) -> Path:
 
 
 def default_hmf_output(halo_catalog: Path) -> Path:
-    return halo_catalog.with_name("halos200c_hmf.txt")
+    return halo_catalog.with_name("halos_fof_hmf.txt")
 
 
 def mass_grid(spec: list[str], target: str, redshift: float) -> tuple[np.ndarray, str]:
@@ -85,7 +85,8 @@ def main() -> int:
                 "output": str(hoddies_output),
                 "schema": "HODDIES halo array",
                 "mass_units": "Msun/h",
-                "radius_units": "kpc/h comoving (nbodykit's physical r200c x (1+z))",
+                "mass_definition": "Mh = FoF mass (length x particle mass)",
+                "radius_units": "kpc/h comoving (nbodykit's physical r200c x (1+z), r200c derived from the FoF mass as if it were M200c)",
                 "position_units": "Mpc/h",
                 "velocity_units": "km/s",
                 "velocity_definition": VELOCITY_DEFINITION,
@@ -98,7 +99,7 @@ def main() -> int:
 
     masses, mass_grid_source = mass_grid(args.mass_grid, args.target, args.redshift)
     print(f"HMF mass grid: {mass_grid_source}")
-    hmf = compute_hmf(catalog["m200c"], volume=args.boxsize**3, mass_grid=masses)
+    hmf = compute_hmf(catalog["m_fof"], volume=args.boxsize**3, mass_grid=masses)
     hmf_output = args.hmf_output or default_hmf_output(args.halo_catalog)
     save_hmf_table(
         hmf,
@@ -110,7 +111,8 @@ def main() -> int:
             "realization": args.realization,
             "catalog": str(args.halo_catalog),
             "output": str(hmf_output),
-            "mass_field": "m200c",
+            "mass_field": "m_fof",
+            "mass_definition": "FoF: length x particle mass",
             "mass_units": "Msun/h",
             "volume_units": "(Mpc/h)^3",
             "volume": args.boxsize**3,

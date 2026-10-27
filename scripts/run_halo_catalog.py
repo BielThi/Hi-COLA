@@ -6,7 +6,7 @@ for example:
 
     srun -n 72 python scripts/run_halo_catalog.py --target Abacus_Small --model LCDM \
         --realization s1234 --redshift 0.5 --boxsize 500 --linking-length 0.2 --nmin 50 \
-        --mdef 200c --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 --omega-lambda 0.684808 \
+        --radius-mdef 200c --h 0.6736 --omega-cdm 0.26589 --omega-b 0.049302 --omega-lambda 0.684808 \
         --tcmb 2.726 --neff 3.046 --n-s 0.9649
 
 All halo settings and the cosmology (taken from the run file by jobs/halo_finder.sh) are given
@@ -17,7 +17,7 @@ It writes one flat structured NumPy halo catalog. Downstream notebooks can use
 that catalog directly for HMFs, or convert it to HODDIES' expected field names
 when running HOD models.
 
-With --particle-fraction > 0 it also writes halos200c_particles.npy (+ .json): a random subsample of
+With --particle-fraction > 0 it also writes halos_fof_particles.npy (+ .json): a random subsample of
 the member particles of every halo (x y z [Mpc/h], vx vy vz [peculiar km/s], halo_id), for HODDIES'
 satellites on particles. halo_id is the row of the halo catalog = FoF label - 1 (nbodykit numbers
 the groups by size and drops label 0, "no halo"); checked against the halo masses.
@@ -51,8 +51,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boxsize", type=float, required=True, help="Mpc/h")
     parser.add_argument("--linking-length", type=float, required=True, help="in units of the mean particle separation")
     parser.add_argument("--nmin", type=int, required=True, help="minimum number of particles per halo")
-    parser.add_argument("--mdef", required=True, choices=["200c"],
-                        help="mass definition; only 200c, the catalog fields and files are named for it")
+    parser.add_argument("--radius-mdef", required=True, choices=["200c"],
+                        help="mass definition assumed for the FoF mass when nbodykit derives the halo radius and "
+                             "concentration (the r200c and c fields); only 200c")
     parser.add_argument("--particle-type", type=int, default=1, help="Gadget particle type of the dark matter")
     parser.add_argument("--particle-fraction", type=float, required=True,
                         help="fraction of the member particles kept (random, the same in every halo); 0 = none")
@@ -172,8 +173,8 @@ def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray
         ("vx", "f8"),
         ("vy", "f8"),
         ("vz", "f8"),
-        ("m200c", "f8"),
-        ("log10_m200c", "f8"),
+        ("m_fof", "f8"),
+        ("log10_m_fof", "f8"),
         ("r200c", "f8"),
         ("rs", "f8"),
         ("c", "f8"),
@@ -189,9 +190,9 @@ def compute_local_halo_catalog_array(halos, vrms: np.ndarray, length: np.ndarray
     # Re-wrap after upcasting to float64 to keep positions strictly in range.
     arr["x"], arr["y"], arr["z"] = (position.T.astype("f8")) % boxsize
     arr["vx"], arr["vy"], arr["vz"] = velocity.T
-    arr["m200c"] = mass
-    arr["log10_m200c"] = np.log10(mass)
-    arr["r200c"] = 1000.0 * radius
+    arr["m_fof"] = mass  # FoF mass: length x particle mass
+    arr["log10_m_fof"] = np.log10(mass)
+    arr["r200c"] = 1000.0 * radius  # nbodykit: radius of 200 rho_crit for a halo of mass m_fof (physical)
     arr["c"] = concentration
     arr["rs"] = arr["r200c"] / concentration
     arr["vrms"] = vrms
@@ -271,12 +272,12 @@ def main() -> int:
     log(comm, "Running FOF; note that FOF(...) calls run() internally")
     fof = FOF(gadget, linking_length=args.linking_length, nmin=args.nmin)
 
-    log(comm, f"Converting FOF groups to HaloCatalog with mdef={args.mdef}")
+    log(comm, f"Converting FOF groups to HaloCatalog (radius and concentration for mdef={args.radius_mdef})")
     halos = fof.to_halos(
         particle_mass=particle_mass,
         cosmo=cosmology,
         redshift=args.redshift,
-        mdef=args.mdef,
+        mdef=args.radius_mdef,
     )
 
     log(comm, "Computing local halo fields")
@@ -330,7 +331,8 @@ def main() -> int:
             "redshift": args.redshift,
             "linking_length": args.linking_length,
             "nmin": args.nmin,
-            "mdef": args.mdef,
+            "mass_definition": "FoF: length x particle mass",
+            "radius_mdef": args.radius_mdef,
             "particle_type": args.particle_type,
             "particle_mass_code_units": particle_mass_code,
             "particle_mass_msun_h": particle_mass,
@@ -340,7 +342,7 @@ def main() -> int:
             "cosmology": cosmology_parameters,
             "cosmology_source": "the simulation's run file",
             "schema": "flat halo catalog",
-            "mass_field": "m200c",
+            "mass_field": "m_fof",
             "mass_units": "Msun/h",
             "radius_units": "kpc/h",
             "position_units": "Mpc/h",

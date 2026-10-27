@@ -14,8 +14,8 @@ HALO_CATALOG_FIELDS = (
     "vx",
     "vy",
     "vz",
-    "m200c",
-    "log10_m200c",
+    "m_fof",
+    "log10_m_fof",
     "r200c",
     "rs",
     "c",
@@ -66,10 +66,10 @@ def require_fields(catalog: np.ndarray, fields: tuple[str, ...] | list[str]) -> 
 
 def validate_halo_catalog(catalog: np.ndarray, *, boxsize: float | None = None) -> None:
     require_fields(catalog, HALO_CATALOG_FIELDS)
-    if np.any(catalog["m200c"] <= 0.0):
-        raise ValueError("Halo catalog contains non-positive m200c values")
-    if not np.allclose(catalog["log10_m200c"], np.log10(catalog["m200c"]), rtol=1.0e-12, atol=1.0e-12):
-        raise ValueError("log10_m200c is inconsistent with m200c")
+    if np.any(catalog["m_fof"] <= 0.0):
+        raise ValueError("Halo catalog contains non-positive m_fof values")
+    if not np.allclose(catalog["log10_m_fof"], np.log10(catalog["m_fof"]), rtol=1.0e-12, atol=1.0e-12):
+        raise ValueError("log10_m_fof is inconsistent with m_fof")
     if np.any(catalog["r200c"] <= 0.0):
         raise ValueError("Halo catalog contains non-positive r200c values")
     if np.any(catalog["rs"] <= 0.0):
@@ -89,17 +89,18 @@ def validate_halo_catalog(catalog: np.ndarray, *, boxsize: float | None = None) 
 
 
 def halo_catalog_to_hoddies(catalog: np.ndarray, redshift: float) -> np.ndarray:
-    """HODDIES halo array of a halo catalog. HODDIES places satellites in comoving coordinates (as with
-    Abacus' comoving r98), while nbodykit's r200c is physical: Rh and Rs are converted to comoving kpc/h."""
+    """HODDIES halo array of a halo catalog: Mh = the FoF mass, Rh = r200c and c derived from it by
+    nbodykit as if it were M200c. HODDIES places satellites in comoving coordinates (as with Abacus'
+    comoving r98), while nbodykit's r200c is physical: Rh and Rs are converted to comoving kpc/h."""
     require_fields(
         catalog,
-        ["x", "y", "z", "vx", "vy", "vz", "m200c", "log10_m200c", "r200c", "rs", "c", "vrms", "halo_id"],
+        ["x", "y", "z", "vx", "vy", "vz", "m_fof", "log10_m_fof", "r200c", "rs", "c", "vrms", "halo_id"],
     )
     arr = np.empty(len(catalog), dtype=HODDIES_DTYPE)
     for field in ["x", "y", "z", "vx", "vy", "vz", "c", "halo_id"]:
         arr[field] = catalog[field]
-    arr["Mh"] = catalog["m200c"]
-    arr["log10_Mh"] = catalog["log10_m200c"]
+    arr["Mh"] = catalog["m_fof"]
+    arr["log10_Mh"] = catalog["log10_m_fof"]
     arr["Rh"] = catalog["r200c"] * (1 + redshift)
     arr["Rs"] = catalog["rs"] * (1 + redshift)
     arr["Vrms"] = catalog["vrms"]
@@ -112,31 +113,6 @@ def load_catalog_metadata(catalog_path: str | Path) -> dict[str, Any]:
         return {}
     with metadata_path.open(encoding="utf-8") as handle:
         return json.load(handle)
-
-
-def load_halo_masses(path: str | Path, mass_field: str | None = None) -> np.ndarray:
-    path = Path(path)
-    if path.suffix == ".fits":
-        import fitsio
-
-        field = mass_field or "m200c"
-        with fitsio.FITS(path) as hdus:
-            data = hdus[1].read(columns=[field])
-        return np.asarray(data[field], dtype="f8")
-
-    if path.suffix == ".npy":
-        catalog = np.load(path, mmap_mode="r")
-        names = catalog.dtype.names
-        if names is None:
-            raise ValueError(f"{path} is not a structured array")
-        candidates = [mass_field] if mass_field is not None else []
-        candidates += ["m200c", "Mh", "Mass"]
-        for field in candidates:
-            if field in names:
-                return np.asarray(catalog[field], dtype="f8")
-        raise ValueError(f"No recognized mass field in {path}; available fields are {names}")
-
-    raise ValueError(f"Unsupported catalog format: {path}")
 
 
 def geometric_edges_from_centers(centers: np.ndarray) -> np.ndarray:
@@ -191,7 +167,7 @@ def save_hmf_table(hmf: Mapping[str, Any], output_path: str | Path, metadata: Ma
         ]
     )
     header = (
-        "M_200c[M_sun/h] n(>M)[h^3/Mpc^3] sigma_n(>M)_poisson[h^3/Mpc^3] "
+        "M_fof[M_sun/h] n(>M)[h^3/Mpc^3] sigma_n(>M)_poisson[h^3/Mpc^3] "
         "dn/dlog10M[h^3/Mpc^3] sigma_dn/dlog10M_poisson[h^3/Mpc^3] counts(>M) counts_bin"
     )
     np.savetxt(output_path, table, header=header)

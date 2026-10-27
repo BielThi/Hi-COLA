@@ -87,10 +87,10 @@ def halo_catalog_dir(target: str, model: str, realization: str, redshift: float)
 
 
 def halo_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_catalog.npy"
+    return halo_catalog_dir(target, model, realization, redshift) / "halos_fof_catalog.npy"
 
 
-HODDIES_ARRAY_NAME = "halos200c_hoddies.npy"
+HODDIES_ARRAY_NAME = "halos_fof_hoddies.npy"
 
 
 def hoddies_catalog_file(target: str, model: str, realization: str, redshift: float) -> Path:
@@ -101,11 +101,11 @@ def hoddies_catalog_file(target: str, model: str, realization: str, redshift: fl
 def particles_file(target: str, model: str, realization: str, redshift: float) -> Path:
     """Random subsample of the FoF member particles (jobs/halo_finder.sh with PARTICLE_FRACTION > 0),
     with the halo_id of the halo catalog."""
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_particles.npy"
+    return halo_catalog_dir(target, model, realization, redshift) / "halos_fof_particles.npy"
 
 
 def hmf_file(target: str, model: str, realization: str, redshift: float) -> Path:
-    return halo_catalog_dir(target, model, realization, redshift) / "halos200c_hmf.txt"
+    return halo_catalog_dir(target, model, realization, redshift) / "halos_fof_hmf.txt"
 
 
 HOD_STATISTICS = ("PS", "MPS")  # power spectrum, marked power spectrum

@@ -2,7 +2,7 @@
 """Make HODDIES galaxy mocks from the halo array of a run and measure their redshift-space P(k)
 and marked P(k).
 
-Input:  halo_catalog/halos200c_hoddies.npy of the run (written by jobs/halo_finder.sh), with
+Input:  halo_catalog/halos_fof_hoddies.npy of the run (written by jobs/halo_finder.sh), with
         peculiar velocities (catalogs made before the velocity fix of 2026-10-14 are refused).
 Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one per seed
         (--name contains {seed}, e.g. LRG_seed{seed} -> LRG_seed42_PS.txt; jobs/hod_mock.sh
@@ -15,7 +15,7 @@ Output: halo_catalog/hod/<name>_PS.txt (+ .h5, .txt.json) in the run folder, one
         as acm), mark m = sum_n c_n delta_R^n with --mark-rcut R and --mark-coefficients c_0 c_1 ...;
         the .h5 has the mark's m_bar, m_min, m_max as attributes, as in acm.
 
-Satellites (--satellites): on random member particles of their halo (halos200c_particles.npy,
+Satellites (--satellites): on random member particles of their halo (halos_fof_particles.npy,
 written by jobs/halo_finder.sh with PARTICLE_FRACTION > 0; halos with fewer stored particles than
 satellites place the rest on the NFW profile), or on HODDIES' NFW profile, as in jobs/hod_fit.sh.
 
@@ -91,7 +91,7 @@ def parse_args() -> argparse.Namespace:
     hod.add_argument("--seeds", type=int, nargs="+", required=True, help="one mock and P(k) per seed")
     hod.add_argument("--nthreads", type=int, required=True, help="HODDIES threads (the mock depends on it)")
     hod.add_argument("--satellites", required=True, choices=["particles", "nfw"],
-                     help="satellites on member particles (halos200c_particles.npy) or on HODDIES' NFW profile")
+                     help="satellites on member particles (halos_fof_particles.npy) or on HODDIES' NFW profile")
     hod.add_argument("--name", required=True,
                      help="output name with {seed}, e.g. LRG_seed{seed} -> hod/LRG_seed42_PS.txt")
     pk = parser.add_argument_group("power spectrum")
@@ -104,7 +104,7 @@ def parse_args() -> argparse.Namespace:
                       help="Gaussian smoothing radius R of the density contrast in the mark [Mpc/h]")
     mark.add_argument("--mark-coefficients", type=float, nargs="+", required=True,
                       help="c_0 c_1 ... of the mark m = sum_n c_n delta_R^n")
-    parser.add_argument("--halo-array", type=Path, default=None, help="Default: halos200c_hoddies.npy of the run")
+    parser.add_argument("--halo-array", type=Path, default=None, help="Default: halos_fof_hoddies.npy of the run")
     args = parser.parse_args()
 
     if "{seed}" not in args.name:
