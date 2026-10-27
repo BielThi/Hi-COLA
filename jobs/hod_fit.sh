@@ -26,7 +26,7 @@
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation, relative to the Hi-COLA folder (or absolute), and the snapshot
 # (its halos, and particles for SATELLITES="particles", must exist: jobs/halo_finder.sh)
-RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_s1234.lua"
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_s1234.lua"
 REDSHIFT="0.500"
 
 # HOD model and the values of the fixed parameters: HODDIES parameter file (relative to the
