@@ -230,6 +230,7 @@ on the command line.
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
 | `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `FIT_R_MIN`, `FIT_R_MAX`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
+| `hmf_abacus.sh` | `REDSHIFT`, `MODEL`, `CLEANED`, `MASS_GRID` | 1 task, 4 threads, 24 GB, 30 min (takes ~30 s) | `sbatch jobs/hmf_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
 ```bash
@@ -308,6 +309,11 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   of the chosen subsamples (A = 3%, B = 7%), TSC, interlaced, window compensated, shot noise
   subtracted (these estimator choices are fixed in the script); Nmesh and k-bins from the job
   (so far A only, 1024, 60).
+- **Abacus reference HMF** (`jobs/hmf_abacus.sh`, `scripts/run_abacus_hmf.py`): from the CompaSO
+  halo catalog of the box (merger-tree cleaned with `CLEANED=1`, as in the DESI HOD fits), masses
+  N × particle mass (SO at about 200 × the mean density, ≥ 35 particles), computed like the
+  Hi-COLA HMFs on the same mass grid (`MASS_GRID` = the runs' `HMF_MASS_GRID`). Mass column
+  `M_CompaSO`: close to, but not the same definition as, the FoF masses of the Hi-COLA halos.
 - **Abacus initial P(k)**: `scripts/generate_abacus_cosm000_pk.py` computes P_cb(k, z=0) for
   AbacusSummit c000 with CLASS (cosmoprimo) and checks σ8_cb = 0.8114.
 - `scripts/euclid_reference_cosmology.py` and `scripts/abacus_reference_cosmology.py` hold the
@@ -428,7 +434,7 @@ imports:
 | notebook | what it does | parameters (top cell) |
 |---|---|---|
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
-| `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
+| `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs with the Abacus HMF (LCDM) and their ratio | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
 | `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, `hod_fit` and `hod_fit_model` (as in `hod_mock.sh`: each model's own fit or one model's fit for both), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
@@ -539,11 +545,11 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
   number). The nDGP tables used by `standalone/nDGP_action.lua` exist only in
   `HiCOLA/Output/` on jed.
 - Halo masses are FoF masses (b = 0.2, roughly M200m), while the COLA_NM4096 reference HMF is
-  spherical-overdensity with an unstated Δ: the two mass definitions differ. The halo radius and
+  spherical-overdensity with an unstated Δ and the Abacus_Small one CompaSO (SO at about 200 × the
+  mean density): the mass definitions differ, less so for Abacus. The halo radius and
   concentration are derived from the FoF mass as if it were M200c (section 8), which only matters
   for HOD satellites placed on the NFW profile. (Until 2026-10-27 the FoF mass was named `m200c`
   and the files `halos200c_*`; existing catalogs were renamed, their content is unchanged.)
-- Abacus_Small has no reference HMF yet.
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History

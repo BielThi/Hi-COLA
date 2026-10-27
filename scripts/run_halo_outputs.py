@@ -122,6 +122,7 @@ def main() -> int:
             "poisson_errors": "sqrt(N) / volume, or sqrt(N_bin) / (volume dlog10M)",
             "n_halos": int(hmf["n_halos"]),
         },
+        mass_column="M_fof",
     )
 
     print(f"Saved halo catalog: {args.halo_catalog}")

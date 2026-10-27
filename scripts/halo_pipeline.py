@@ -153,7 +153,8 @@ def compute_hmf(masses: np.ndarray, volume: float, mass_grid: np.ndarray) -> dic
     }
 
 
-def save_hmf_table(hmf: Mapping[str, Any], output_path: str | Path, metadata: Mapping[str, Any]) -> None:
+def save_hmf_table(hmf: Mapping[str, Any], output_path: str | Path, metadata: Mapping[str, Any], mass_column: str) -> None:
+    """HMF table and its .json; mass_column names the mass definition in the header, e.g. M_fof."""
     output_path = Path(output_path)
     table = np.column_stack(
         [
@@ -167,7 +168,7 @@ def save_hmf_table(hmf: Mapping[str, Any], output_path: str | Path, metadata: Ma
         ]
     )
     header = (
-        "M_fof[M_sun/h] n(>M)[h^3/Mpc^3] sigma_n(>M)_poisson[h^3/Mpc^3] "
+        f"{mass_column}[M_sun/h] n(>M)[h^3/Mpc^3] sigma_n(>M)_poisson[h^3/Mpc^3] "
         "dn/dlog10M[h^3/Mpc^3] sigma_dn/dlog10M_poisson[h^3/Mpc^3] counts(>M) counts_bin"
     )
     np.savetxt(output_path, table, header=header)
