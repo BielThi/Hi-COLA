@@ -402,7 +402,9 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   HOD of `jobs/hod_mock.sh` with `HOD_FIT` = the fit name) and `best_fit_model.npz` (model vectors at the best fit for the fit
   seed and the extra seeds, HOD occupation), and `reference_model.npz` the same for the HOD of
   `REFERENCE_PARAM_FILE` (all its values for the tracer, e.g. `HOD_parameter_file_z0.500.yaml`), with
-  its chi2 in `best_fit.json` (`reference`) and a copy of the file. `HOD_fit.ipynb` (exploration) also writes its
+  its chi2 in `best_fit.json` (`reference`) and a copy of the file. The reference curve is only
+  indicative: DESI/AbacusHOD parameters are fitted on CompaSO masses, while they are applied here to
+  FoF masses (about 0.07-0.1 dex larger at fixed abundance, section 14). `HOD_fit.ipynb` (exploration) also writes its
   `fit_info.json` and HODDIES' `best_fit_result_*.npy` into a folder of this form.
 
 ## 9. Notebooks
@@ -554,6 +556,13 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
   concentration, an inconsistent NFW halo; the existing catalogs were renamed and their radius and
   concentration recomputed as virial (section 8). This changes only satellites on the NFW profile:
   mocks with particles are bit-for-bit the same.)
+- HOD parameters depend on the halo mass definition: those of the reference HOD files
+  (`HOD_parameter_file_z0.500*.yaml`, from DESI/AbacusHOD fits on CompaSO halos) do not carry over
+  exactly to the FoF masses of the Hi-COLA halos, which are about 0.07-0.1 dex larger at fixed
+  abundance (Hi-COLA/Abacus HMF in `compare_Abacus_Small.ipynb`). The reference curves of the HOD
+  fits are therefore indicative only, and fitted mass parameters (`log_Mcent`, `M_0`, `M_1`) cannot
+  be compared one-to-one with DESI values; the fits themselves are unaffected. If needed, the
+  reference could be translated to FoF masses by abundance matching the two HMFs (not done).
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History
