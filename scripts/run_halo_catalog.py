@@ -291,6 +291,8 @@ def main() -> int:
     offsets = np.cumsum([0] + comm.allgather(int(local_count)))[:-1]
     local_arr["halo_id"] = np.arange(offsets[comm.rank], offsets[comm.rank] + len(local_arr), dtype="i8")
 
+    if comm.rank == 0 and os.path.dirname(args.output):
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)  # also holds the member particles saved first
     if args.particle_fraction > 0:
         local_particles = local_member_particles(fof, gadget, args.particle_fraction, args.particle_seed, args.boxsize, comm)
         n_members = comm.allreduce(int(np.sum(np.asarray(fof.labels) > 0)), op=MPI.SUM)
@@ -319,9 +321,6 @@ def main() -> int:
 
     gathered = comm.gather(local_arr, root=0)
     if comm.rank == 0:
-        outdir = os.path.dirname(args.output)
-        if outdir:
-            os.makedirs(outdir, exist_ok=True)
         arr = np.concatenate(gathered) if gathered else local_arr
         np.save(args.output, arr)
 
