@@ -10,7 +10,8 @@ Data:   wp(rp) and/or the multipoles xi_ell(s) of pycorr two-point estimators (e
         --fit-r-min <= rp, s <= --fit-r-max (bins entirely inside; 'None' = no limit on that side).
         Covariance: the jackknife errors of the data times a correlation matrix (e.g. from mocks)
         covering the statistics --correlation-statistics (its blocks of the fitted ones are
-        used), or diagonal ("none").
+        used), or diagonal ("none"). --data-vector can replace the measured values by another data
+        vector on the same bins (e.g. the mean of mocks), keeping these errors and this covariance.
 Model:  HODDIES mocks on the run's halos (jobs/halo_finder.sh: halos_fof_hoddies.npy, Rh
         comoving), all with the same seed, measured with the bins of the data (pycorr, redshift
         space along the line of sight with H(z) of the run's cosmology); chi2 as HODDIES'
@@ -25,8 +26,8 @@ Fit:    a stochopy minimizer (e.g. cmaes) over the free HOD parameters within th
 
 Output (hp.hod_fit_dir, kept in hicola_data next to the run's measurements), in a folder named
 after what is fitted: <tracer>_<HOD model>_<n free>p_<satellites>[_<statistics>] (HODDIES' fit model
-name, ptcl or nfw, the statistics only when not all of wp + xi_0 + xi_2, and _r<min>-<max> when
-the fit range is restricted), e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp, LRG_SHOD_6p_ptcl_r0.1-10,
+name, ptcl or nfw, the statistics only when not all of wp + xi_0 + xi_2, _r<min>-<max> when
+the fit range is restricted, and _data-<file name> with --data-vector), e.g. LRG_SHOD_6p_ptcl, LRG_SHOD_6p_nfw_wp, LRG_SHOD_6p_ptcl_r0.1-10,
 LRG_SHOD_6p_ptcl_rmin-10; a new fit of the same thing replaces it:
     settings.json              the settings of the fit, the run and the code versions
     <HOD parameter file>.yaml  copy of the HOD parameter file
@@ -88,6 +89,9 @@ def parse_args() -> argparse.Namespace:
     data.add_argument("--correlation-statistics", nargs="+", required=True, choices=STATISTICS,
                       help="statistics covered by the correlation matrix, in this order (wp, then xi_ell for each ell), "
                            "with the same bins as the data; the blocks of the fitted ones are used")
+    data.add_argument("--hartlap-nreal", required=True,
+                      help="number of realisations the correlation matrix was estimated from, for the Hartlap factor "
+                           "(N - n_data - 2) / (N - 1) on the inverse covariance; or 'none' (no factor)")
     wp = parser.add_argument_group("wp (required when fitting wp or when the correlation matrix covers it)")
     wp.add_argument("--data-rppi", type=Path, help="pycorr estimator in (rp, pi)")
     wp.add_argument("--pimax", type=float)
@@ -100,6 +104,9 @@ def parse_args() -> argparse.Namespace:
     xi.add_argument("--s-range", type=float, nargs=2, metavar=("MIN", "MAX"))
     data.add_argument("--fit-r-min", required=True, help="smallest rp and s fitted [Mpc/h], or 'None'")
     data.add_argument("--fit-r-max", required=True, help="largest rp and s fitted [Mpc/h], or 'None'")
+    data.add_argument("--data-vector", required=True,
+                      help="'none' (the measured data), or a .npz whose data_vec (same statistics and bins: rp, s) "
+                           "replaces the measured values; errors and correlation stay those of the data")
     data.add_argument("--los", required=True, choices=["x", "y", "z"], help="line of sight of the model (box axis)")
     data.add_argument("--satellites", required=True, choices=["particles", "nfw"],
                       help="satellites on member particles or on HODDIES' NFW profile")
@@ -231,7 +238,29 @@ def load_data(args: argparse.Namespace) -> dict:
         correlation = full[np.ix_(rows, rows)]
     data.update(data_vec=data_vec, data_err=data_err, correlation=correlation,
                 cov=np.outer(data_err, data_err) * correlation)
+    if args.data_vector != "none":
+        replace_data_vector(data, args)
     return data
+
+
+def replace_data_vector(data: dict, args: argparse.Namespace) -> None:
+    """Replace the measured values by the data_vec of --data-vector (e.g. the mean of mocks), after checking
+    that it has the same statistics and bins; the errors and the covariance are kept."""
+    other = np.load(args.data_vector)
+    if list(other["statistics"]) != args.statistics or other["data_vec"].shape != data["data_vec"].shape:
+        raise SystemExit(f"--data-vector {args.data_vector}: {list(other['statistics'])}, {other['data_vec'].size} values; "
+                         f"the fit has {args.statistics}, {data['data_vec'].size} values")
+    for separation in ("rp", "s"):
+        if separation in data and not np.allclose(other[separation], data[separation], rtol=1e-6):
+            raise SystemExit(f"--data-vector {args.data_vector}: its {separation} bins differ from those of the data")
+    data["measured_data_vec"] = data["data_vec"]
+    data["data_vec"] = np.asarray(other["data_vec"], dtype=float)
+    split = np.cumsum([data["wp"].size if s == "wp" else data["xi"].size for s in args.statistics])[:-1]
+    for statistic, values in zip(args.statistics, np.split(data["data_vec"], split)):
+        if statistic == "wp":
+            data["wp"] = values
+        else:
+            data["xi"] = values.reshape(data["xi"].shape)
 
 
 # ---------------------------------------------------------------- HODDIES
@@ -303,9 +332,20 @@ def build_hod(hoddies: dict, halos: np.ndarray, particles, data: dict, args: arg
     fit_param["priors"] = {args.tracer: {name: list(bounds) for name, bounds in args.priors.items()}}  # replaces the file's
     fit_param["fit_statistics"] = list(args.statistics)
     fit_param["add_poisson_noise"] = False
-    fit_param["hartlap_factor"] = 0
+    fit_param["hartlap_factor"] = hartlap_factor(args.hartlap_nreal, data["data_vec"].size)
     hod.initialize_fit(data["data_vec"], data["cov"])
     return hod
+
+
+def hartlap_factor(n_real, n_data: int) -> float:
+    """HODDIES' hartlap_factor h (inverse covariance x (1 - h)) for the Hartlap correction
+    (N - n_data - 2) / (N - 1) = 1 - h, i.e. h = (n_data + 1) / (N - 1); 0 without it (n_real 'none')."""
+    if n_real == "none":
+        return 0.0
+    n_real = int(n_real)
+    if n_real < n_data + 3:
+        raise SystemExit(f"--hartlap-nreal {n_real}: needs more than n_data + 2 = {n_data + 2} realisations")
+    return (n_data + 1) / (n_real - 1)
 
 
 FULL_STATISTICS = (["wp", "xi_ells"], [0, 2])  # fits of all of wp + xi_0 + xi_2 have no statistics in their name
@@ -322,6 +362,8 @@ def fit_name(hod, args: argparse.Namespace) -> str:
     if args.fit_r_min is not None or args.fit_r_max is not None:
         bound = lambda value, word: word if value is None else f"{value:g}"
         name += f"_r{bound(args.fit_r_min, 'min')}-{bound(args.fit_r_max, 'max')}"
+    if args.data_vector != "none":
+        name += f"_data-{Path(args.data_vector).stem}"
     return name
 
 
@@ -563,9 +605,11 @@ def main() -> int:
             "hod_parameters": hod.args[args.tracer], "priors": args.priors,
             "data": {"statistics": args.statistics, "rppi": str(args.data_rppi), "smu": str(args.data_smu),
                      "correlation": args.correlation, "correlation_statistics": args.correlation_statistics,
+                     "hartlap_nreal": args.hartlap_nreal,
+                     "hartlap_factor": hod.args["fit_param"]["hartlap_factor"],
                      "pimax": args.pimax, "rp_rebin": args.rp_rebin,
                      "rp_range": args.rp_range, "fit_r_range": [args.fit_r_min, args.fit_r_max], "ells": args.ells, "s_rebin": args.s_rebin,
-                     "s_range": args.s_range, "n_data": int(data["data_vec"].size)},
+                     "s_range": args.s_range, "n_data": int(data["data_vec"].size), "data_vector": args.data_vector},
             "model": {"los": args.los, "rsd": True, "mock_seed": args.mock_seed, "model_seeds": args.model_seeds,
                       "reference_param_file": str(args.reference_param_file)},
             "minimizer": {"package": "stochopy", "method": args.method, "maxiter": args.maxiter,

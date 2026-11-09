@@ -58,11 +58,20 @@ S_RANGE="0.2 32"          # with the files above: 26 bins, 0.215 to 31.6 Mpc/h
 # statistics are used. The wp and xi_ell settings above are needed for all of them, fitted or not.
 CORRELATION="DESI_Y1_LRG/M_corr_lrg_z0.5.txt"
 CORRELATION_STATISTICS="wp xi_ells"
+# Hartlap factor (N - n_data - 2) / (N - 1) on the inverse covariance: N = number of realisations the
+# correlation matrix was estimated from (M_corr_lrg_z0.5.txt: 1883 Abacus small boxes, from
+# Notebooks/Task2/README), or "none" for no factor. A constant factor on chi2: it does not move the best fit.
+HARTLAP_NREAL="1883"
 # Fit range [Mpc/h], the same for rp and s: only the bins (of the ranges above) entirely between
 # FIT_R_MIN and FIT_R_MAX are fitted, e.g. "1e-1" and "1e1"; "None" = no limit on that side. With a
 # limit the results are named ..._r<min>-<max> (e.g. _r0.1-10, _rmin-10), without one as usual.
 FIT_R_MIN="1.0"
 FIT_R_MAX="None"
+# Data vector: "none" = the measured values of the files above; or a .npz (relative to $HICOLA_DATA_ROOT
+# or absolute) with data_vec on the same statistics and bins (e.g. the mean of mocks: Notebooks/Task2/
+# make_gr_data_vector.py) that replaces them, the errors and correlation above being kept. The results
+# are then named ..._data-<file name>.
+DATA_VECTOR="none"
 
 # Model: line of sight of the redshift-space distortions (box axis); HOD seed of every mock of the
 # fit; extra seeds of the best-fit model (for its mock-to-mock scatter)
@@ -110,6 +119,7 @@ data_path() { case "$1" in /*|none) echo "$1" ;; *) echo "$HICOLA_DATA_ROOT/$1" 
 DATA_RPPI=$(data_path "$DATA_RPPI")
 DATA_SMU=$(data_path "$DATA_SMU")
 CORRELATION=$(data_path "$CORRELATION")
+DATA_VECTOR=$(data_path "$DATA_VECTOR")
 
 hicola_load_run "$RUN_FILE"
 if [ "$TARGET" = standalone ]; then
@@ -131,9 +141,9 @@ read -r -a CORRELATION_STATISTIC_LIST <<< "$CORRELATION_STATISTICS"
 read -r -a RP_LIST <<< "$RP_RANGE"
 read -r -a S_LIST <<< "$S_RANGE"
 read -r -a ELL_LIST <<< "$ELLS"
-DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-statistics "${CORRELATION_STATISTIC_LIST[@]}"
+DATA=(--statistics "${STATISTIC_LIST[@]}" --data-rppi "$DATA_RPPI" --data-smu "$DATA_SMU" --correlation "$CORRELATION" --correlation-statistics "${CORRELATION_STATISTIC_LIST[@]}" --hartlap-nreal "$HARTLAP_NREAL"
       --pimax "$PIMAX" --rp-rebin "$RP_REBIN" --rp-range "${RP_LIST[@]}"
-      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --fit-r-min "$FIT_R_MIN" --fit-r-max "$FIT_R_MAX" --los "$LOS"
+      --ells "${ELL_LIST[@]}" --s-rebin "$S_REBIN" --s-range "${S_LIST[@]}" --fit-r-min "$FIT_R_MIN" --fit-r-max "$FIT_R_MAX" --data-vector "$DATA_VECTOR" --los "$LOS"
       --satellites "$SATELLITES")
 read -r -a MODEL_SEED_LIST <<< "$MODEL_SEEDS"
 FIT=(--method "$METHOD" --maxiter "$MAXITER" --popsize "$POPSIZE" --xtol "$XTOL" --start "$START"
@@ -150,7 +160,8 @@ echo "Data:           fitted: $STATISTICS; wp: rp in [$RP_RANGE] Mpc/h, rebin $R
 echo "                $DATA_RPPI"
 echo "                $DATA_SMU"
 echo "Fit range:      $FIT_R_MIN to $FIT_R_MAX Mpc/h (rp and s)"
-echo "Covariance:     jackknife errors x $CORRELATION (covering $CORRELATION_STATISTICS)"
+echo "Data vector:    $DATA_VECTOR"
+echo "Covariance:     jackknife errors x $CORRELATION (covering $CORRELATION_STATISTICS); Hartlap N = $HARTLAP_NREAL"
 echo "Model:          RSD along $LOS, mock seed $MOCK_SEED, extra seeds of the best fit $MODEL_SEEDS"
 echo "Reference HOD:  $REFERENCE_PARAM_FILE"
 echo "Minimizer:      $METHOD, maxiter $MAXITER, popsize $POPSIZE, xtol $XTOL, start $START (seed $START_SEED)"

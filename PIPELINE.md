@@ -229,7 +229,7 @@ on the command line.
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
-| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `FIT_R_MIN`, `FIT_R_MAX`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `HARTLAP_NREAL`, `FIT_R_MIN`, `FIT_R_MAX`, `DATA_VECTOR`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
 | `hmf_abacus.sh` | `REDSHIFT`, `MODEL`, `CLEANED`, `MASS_GRID` | 1 task, 4 threads, 24 GB, 30 min (takes ~30 s) | `sbatch jobs/hmf_abacus.sh` |
 | `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
@@ -380,9 +380,9 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 - **HOD fits** `hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<simulation_name>_z<z>_HOD_fit_<name>/`
   (`jobs/hod_fit.sh`, `scripts/run_hod_fit.py`, `hp.hod_fit_dir`; shown by `HOD_fit_results.ipynb`,
   read with `an.load_hod_fit`), written there directly (not on scratch). The name says what is
-  fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>][_r<min>-<max>]` (HODDIES' fit
+  fitted: `<tracer>_<HOD model>_<n free>p_<ptcl|nfw>[_<statistics>][_r<min>-<max>][_data-<file>]` (HODDIES' fit
   model name, the satellites, the statistics only when not all of wp + xi_0 + xi_2, and the fit
-  range only when `FIT_R_MIN` or `FIT_R_MAX` is set), e.g. `LRG_SHOD_6p_ptcl`, `LRG_SHOD_6p_nfw`,
+  range only when `FIT_R_MIN` or `FIT_R_MAX` is set, the data vector file only with `DATA_VECTOR`), e.g. `LRG_SHOD_6p_ptcl`, `LRG_SHOD_6p_nfw`,
   `LRG_SHOD_6p_ptcl_wp`, `LRG_SHOD_6p_ptcl_r0.1-10`, `LRG_SHOD_6p_ptcl_rmin-10`; a new fit of the same thing replaces the folder (the
   settings of each fit are in its `settings.json`). Satellites (`SATELLITES`): `particles` = a
   random member particle of the halo (`halos_fof_particles.npy`), velocity
@@ -392,7 +392,14 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   correlation matrix covers (wp, then xi_ell per ell, with the bins of `RP_RANGE` and `S_RANGE`);
   the blocks of the fitted statistics are used. `FIT_R_MIN`/`FIT_R_MAX` restrict the fit to the bins
   entirely inside that range, the same for rp and s ("None" = no limit on that side); the model is
-  measured on those bins and the covariance is the matching sub-block of the full matrix. Files:
+  measured on those bins and the covariance is the matching sub-block of the full matrix.
+  `HARTLAP_NREAL` = N, the number of realisations the correlation matrix was estimated from: the
+  inverse covariance is multiplied by the Hartlap factor (N − n_data − 2)/(N − 1), n_data = the
+  fitted data vector ("none" = no factor). It scales every chi2 by the same constant: the best fit
+  does not move, but chi2, chi2/dof and p-values differ from fits without it (fits before
+  2026-11 had none). `DATA_VECTOR`: a `.npz` whose `data_vec` (same statistics and bins, checked)
+  replaces the measured values, e.g. the mean of mocks; the errors and the correlation of the
+  measured data are kept, and the measured values are stored as `measured_data_vec`. Files:
   `settings.json` (all settings of the job, run, H(z), code versions, job log), a copy of the HOD
   parameter file, `data.npz` (the fitted data: separations, values, errors, data vector, covariance,
   bin edges), `evaluations/rank_<k>.txt` (every evaluation of rank k: parameters, chi2, galaxies,
