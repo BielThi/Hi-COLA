@@ -105,14 +105,79 @@ Environment variables (all optional; defaults in `jobs/hicola_env.sh` and
 ## 4. Software setup
 
 **Conda env `hicola`** (Python 3.11; not described by a file in the repository, create it on
-each machine). Packages used: `nbodykit` (FoF, P(k)), `mpi4py`, `abacusutils` (Abacus
-catalogs), `cosmoprimo` + `pyclass` (CLASS), `numba`, `numpy`, `scipy`, `pandas`,
-`matplotlib`, `astropy`, `fitsio`, `pynbody`, `h5py`, `hdf5plugin` (imported by HODDIES), `jax` +
-`jax-power` (`pip install "jax-power @ git+https://github.com/adematti/jax-power.git"`, with
-`lsstypes`; for the HOD P(k)), `sympy` + `configobj` (frontend),
-`jupyter`, `nbstripout`, plus FFTW (with MPI and threads), GSL, Lua (the `lua` command is
-used by the jobs) and an MPI compiler wrapper (`mpicxx`) to build the backend. The jobs
-activate the env themselves.
+each machine; the jobs activate it themselves). What it must contain, with the versions of the env
+on jed (2026-11) as reference:
+
+1. From conda-forge (compilers, MPI and the C libraries of the backend, and packages that are
+   simpler from conda):
+   ```bash
+   conda create -n hicola -c conda-forge python=3.11 pip "fftw=*=mpi_openmpi*" openmpi gsl lua \
+       gcc gxx make cmake scipy h5py hdf5plugin matplotlib pandas astropy sympy configobj ipykernel
+   conda activate hicola
+   ```
+   FFTW must be the MPI build of the same MPI as everything else (here Open MPI 5.0.10); `lua`
+   (5.5) is the command the jobs use to read run files; `mpicxx`/`mpicc` come with `openmpi`.
+2. From PyPI (`numpy` must stay 1.x for nbodykit; `nbodykit` and `mpi4py` build against the
+   env's `mpicc`):
+   ```bash
+   pip install "numpy<2" numba mpi4py nbodykit halotools abacusutils fitsio pynbody stochopy \
+       pyyaml jupyter nbstripout
+   ```
+3. From git (cosmodesi / adematti packages, not or not up to date on PyPI):
+   ```bash
+   pip install "cosmoprimo[class] @ git+https://github.com/cosmodesi/cosmoprimo" \
+       "pyclass @ git+https://github.com/adematti/pyclass" \
+       "pycorr[corrfunc] @ git+https://github.com/cosmodesi/pycorr" \
+       "mpytools @ git+https://github.com/cosmodesi/mpytools" \
+       "lsstypes @ git+https://github.com/adematti/lsstypes" \
+       "jax-power @ git+https://github.com/adematti/jax-power.git"
+   ```
+   `pycorr[corrfunc]` installs the cosmodesi fork of Corrfunc (not the PyPI Corrfunc), which
+   pycorr needs.
+
+| package | used for | on jed |
+|---|---|---|
+| `nbodykit` (+ `halotools`, `pmesh`, `pfft-python`, `mpsort`, `kdcount`, `bigfile`, `classylss`) | FoF halo finder, radius and concentration | 0.3.16 (halotools 0.9.4) |
+| `mpi4py` | MPI in the halo finder and the HOD fit | 4.1.2, Open MPI 5.0.10 |
+| `numpy`, `scipy`, `numba` | everywhere, HODDIES | 1.26.4, 1.17.1, 0.65.1 |
+| `abacusutils` (`abacusnbody`) | Abacus catalogs and P(k); imported by HODDIES | 2.1.2 |
+| `cosmoprimo`, `pyclass` | cosmology, H(z) of the HOD fits | git 5e30142, git 06724c1 |
+| `pycorr` + cosmodesi `Corrfunc` | two-point statistics of the HOD fits | git eaac880, git 1dbddfc |
+| `stochopy` | minimizer of the HOD fits | 2.3.0 |
+| `mpytools`, `pyyaml`, `h5py`, `hdf5plugin`, `fitsio` | HODDIES (imported with it) | git 3ddf0a2, 6.0.3, 3.15.1, 6.0.0, 1.3.0 |
+| `jax`, `jax-power`, `lsstypes` | P(k) and marked P(k) of the HOD mocks (CPU) | 0.7.1, git 191d5c8, git 281217c |
+| `astropy`, `pandas`, `matplotlib`, `pynbody` | analysis, notebooks | 7.2.0, 3.0.2, 3.10.8, 2.4.2 |
+| `sympy`, `configobj` | frontend | 1.14.0, 5.0.9 |
+| `jupyter`, `ipykernel`, `nbstripout` | notebooks, git filter | |
+
+HODDIES itself is **not** taken from the env: the jobs and notebooks import the clone next to
+this repository (`$HODDIES_ROOT`); a `HODDIES` package installed in the env is ignored. Its
+dependencies are in the lists above (`torch` is not needed: HODDIES imports it only in the
+emulator functions).
+
+Check of a new env (run in the Hi-COLA folder; it must print `missing: none`, `numpy 1.x` and
+HODDIES from the clone):
+```bash
+conda activate hicola
+python -c "
+import importlib
+mods = 'numpy scipy numba nbodykit halotools mpi4py abacusnbody cosmoprimo pyclass pycorr Corrfunc jax jaxpower lsstypes mpytools stochopy yaml h5py hdf5plugin fitsio pynbody astropy pandas matplotlib sympy configobj'.split()
+bad = []
+for m in mods:
+    try: importlib.import_module(m)
+    except Exception as e: bad.append(f'{m}: {e}')
+print('missing:', bad or 'none')
+import numpy; print('numpy', numpy.__version__)"
+PYTHONPATH=../HODDIES python -c "from HODDIES import HOD; from HODDIES.sim_loader import Base_catalogue; import HODDIES; print('HODDIES from', HODDIES.__file__)"
+which lua mpicxx nbstripout
+```
+**MPI**: `mpi4py`, the MPI FFTW and the `nbody` binary must all use the MPI that the jobs launch
+with (`srun --mpi=pmix` in `halo_finder.sh` and `hod_fit.sh`, `mpirun` in `backend.sh`). On jed
+that is the env's Open MPI. On a Cray machine (e.g. Perlmutter), the system MPI (Cray MPICH,
+`cc`/`CC` wrappers, plain `srun`) may be needed instead for multi-node runs: then `mpi4py` is
+built against it (`MPICC="cc -shared" pip install --no-binary=mpi4py mpi4py`), FFTW comes from the
+system (`cray-fftw`) and the backend Makefile and launchers change accordingly. This is not set up
+in the repository.
 
 **Backend binary** `HiCOLA/FML/COLASolver/nbody`: `cd HiCOLA/FML/COLASolver && make` with the
 `hicola` env activated. The Makefile (the one file changed inside `HiCOLA/`) takes FFTW, GSL
@@ -496,8 +561,8 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 
 1. Clone `BielThi/Hi-COLA` (branch `main`) and `BielThi/HODDIES` (branch `main`) into the same folder, copy `hicola_data/`
    next to them (or export `HICOLA_DATA_ROOT` / `HODDIES_ROOT`).
-2. Create the `hicola` conda env (section 4), build `nbody` with it activated, run
-   `nbstripout --install` in the clone.
+2. Create the `hicola` conda env (section 4) and run its check, build `nbody` with it activated,
+   run `nbstripout --install` in the clone. Decide which MPI the cluster needs (section 4, MPI).
 3. Machine-specific values written in full:
    - the scratch run root in the `output_folder` of the run files,
    - the log folder in the `#SBATCH -o/-e` lines of the job scripts,
