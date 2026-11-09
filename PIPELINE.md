@@ -161,7 +161,7 @@ P(k)) and named by a **model** and a **realization**:
 | | values |
 |---|---|
 | target | `COLA_NM4096`: 1024 Mpc/h, 1024³ particles, Euclid cosmology, Bart's initial P(k), z_init 19, outputs z = 1.65, 1.4, 1.2, 1.0 · `Abacus_Small`: 500 Mpc/h, 1024³ particles, AbacusSummit c000 cosmology, its initial P(k), z_init 49, outputs z = 1.1, 0.8, 0.5. Both 30 time steps |
-| model | `LCDM` (`gravity_model = "GR"`) · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = `gravity_model = "DGP"` with `gravity_model_dgp_rcH0overc = 1.2` (Hi-COLA's built-in DGP) |
+| model | `LCDM` (`gravity_model = "GR"`) · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = `gravity_model = "DGP"` with `gravity_model_dgp_rcH0overc = 1.2` (Hi-COLA's built-in DGP) · suffix `_high` = 100 time steps instead of 30, e.g. `LCDM_high`, `nDGP_N1.2_high` |
 | realization | `s<seed>` · `s<seed>-fixed` (`ic_fix_amplitude = true`) · `s<seed>-fixed-inv` (also `ic_reverse_phases = true`); the pair -fixed / -fixed-inv is averaged as "paired-fixed" |
 
 ```
@@ -174,7 +174,8 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 ├── COLA_NM4096/   LCDM_s1234, LCDM_s1234-fixed, LCDM_s1234-fixed-inv,
 │                  nDGP_N1.2_s1234, nDGP_N1.2_s1234-fixed, nDGP_N1.2_s1234-fixed-inv   (.lua)
 ├── Abacus_Small/  the same six + nDGP_N1.0_s1234 + nDGP_N3.0_s1234 + the same six with seed 4321: LCDM_s4321, LCDM_s4321-fixed, LCDM_s4321-fixed-inv,
-│                  nDGP_N1.2_s4321, nDGP_N1.2_s4321-fixed, nDGP_N1.2_s4321-fixed-inv   (.lua)
+│                  nDGP_N1.2_s4321, nDGP_N1.2_s4321-fixed, nDGP_N1.2_s4321-fixed-inv,
+│                  LCDM_high_s1234, nDGP_N1.2_high_s1234 (100 time steps)   (.lua)
 └── standalone/    runs not matched to a reference, kept as examples:
     ├── cuGal.lua                               cubic Galileon through the frontend (gravity_model = "HiCOLA")
     └── nDGP_action.lua                         nDGP from its Horndeski action through the frontend
@@ -183,7 +184,7 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 Every run file is a complete Hi-COLA parameter file, like the original template: every
 setting is written in it. Within a target, the files differ only in `simulation_name`,
 `output_folder`, `gravity_model` (and `gravity_model_dgp_rcH0overc`), `ic_random_seed`,
-`ic_fix_amplitude` and `ic_reverse_phases`. Input paths (initial P(k), frontend tables) are
+`ic_fix_amplitude` and `ic_reverse_phases` (and `timestep_nsteps` for the `_high` models). Input paths (initial P(k), frontend tables) are
 relative to the Hi-COLA folder, where the jobs run `nbody`. Some values are Lua expressions
 of others, as in the template (e.g. `force_nmesh = 3 * particle_Npart_1D`), so changing the
 particle number also changes those.

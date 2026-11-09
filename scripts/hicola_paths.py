@@ -9,7 +9,7 @@ Three roots, each overridable with an environment variable (see jobs/hicola_env.
 A run is identified by (target, model, realization), e.g. ("Abacus_Small", "nDGP_N1.2", "s1234-fixed"):
 
     target       reference simulation the run is matched to: COLA_NM4096 | Abacus_Small
-    model        LCDM | nDGP_N<rcH0>
+    model        LCDM | nDGP_N<rcH0>, optionally with _high (100 time steps instead of 30)
     realization  s<seed>[-fixed[-inv]]
 
 Its Lua file is HiCOLA/Parameter_files/Backend_parameter_files/<target>/<model>_<realization>.lua,
