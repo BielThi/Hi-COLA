@@ -19,6 +19,7 @@ import numpy as np
 import hicola_paths as hp
 
 PAIRED_FIXED = ("s1234-fixed", "s1234-fixed-inv")
+PAIRED_FIXED_S4321 = ("s4321-fixed", "s4321-fixed-inv")  # Abacus_Small only
 
 
 def load_table(path: str | Path) -> tuple[np.ndarray, np.ndarray]:

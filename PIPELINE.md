@@ -173,7 +173,8 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 │   └── abacus_cosm000_pk_cb_z0.000.dat         Abacus_Small (P_cb at z=0, from scripts/generate_abacus_cosm000_pk.py)
 ├── COLA_NM4096/   LCDM_s1234, LCDM_s1234-fixed, LCDM_s1234-fixed-inv,
 │                  nDGP_N1.2_s1234, nDGP_N1.2_s1234-fixed, nDGP_N1.2_s1234-fixed-inv   (.lua)
-├── Abacus_Small/  the same six + nDGP_N1.0_s1234
+├── Abacus_Small/  the same six + nDGP_N1.0_s1234 + nDGP_N3.0_s1234 + the same six with seed 4321: LCDM_s4321, LCDM_s4321-fixed, LCDM_s4321-fixed-inv,
+│                  nDGP_N1.2_s4321, nDGP_N1.2_s4321-fixed, nDGP_N1.2_s4321-fixed-inv   (.lua)
 └── standalone/    runs not matched to a reference, kept as examples:
     ├── cuGal.lua                               cubic Galileon through the frontend (gravity_model = "HiCOLA")
     └── nDGP_action.lua                         nDGP from its Horndeski action through the frontend
