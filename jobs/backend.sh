@@ -45,8 +45,19 @@ RUN_FILE=$(readlink -f "$RUN_FILE")
 hicola_load_run "$RUN_FILE"
 hicola_print_env
 hicola_print_run "$RUN_FILE"
+echo "Grids:          $MESHES"
 echo "Resources:      ${SLURM_JOB_NUM_NODES} nodes, ${SLURM_NTASKS} MPI tasks"
 echo "================================================================"
+
+# Hi-COLA aborts (after the queue wait and start-up) if the number of tasks does not divide a
+# grid size: check it now
+for nmesh in $MESHES; do
+    if (( nmesh % SLURM_NTASKS != 0 )); then
+        echo "Job layout: ${SLURM_NTASKS} MPI tasks do not divide the grid size $nmesh (grids: $MESHES)." >&2
+        echo "Choose the number of tasks so that it divides all of them." >&2
+        exit 1
+    fi
+done
 
 # If this job is submitted from inside an interactive allocation, inherited
 # SLURM_MEM_* variables can conflict with this script's --mem-per-cpu request.

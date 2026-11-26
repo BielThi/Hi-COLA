@@ -19,6 +19,10 @@ if [ "${CONDA_DEFAULT_ENV:-}" != "$HICOLA_CONDA_ENV" ]; then
     # conda's activation scripts are not written for `set -u`
     case $- in *u*) hicola_nounset=1; set +u ;; *) hicola_nounset= ;; esac
     if [ "$(type -t conda)" != function ]; then
+        # On NERSC (Perlmutter), conda comes from a module
+        if [ -z "${CONDA_EXE:-}" ] && ! command -v conda >/dev/null && [ "$(type -t module)" = function ]; then
+            module load conda
+        fi
         for conda_exe in "${CONDA_EXE:-}" "$(command -v conda)" "$HOME/miniconda3/bin/conda" "$HOME/anaconda3/bin/conda"; do
             if [ -n "$conda_exe" ] && [ -x "$conda_exe" ]; then
                 eval "$("$conda_exe" shell.bash hook)"

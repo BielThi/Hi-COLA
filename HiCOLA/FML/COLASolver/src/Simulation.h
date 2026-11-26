@@ -24,6 +24,7 @@
 
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -153,6 +154,9 @@ class NBodySimulation {
     double ic_reconstruct_dimless_smoothing_scale; // Smoothing scales R/boxsize
     bool ic_reconstruct_interlacing;               // Use interlacing (probably not)?
 
+    // Initial conditions: white noise of a reference simulation (ic_random_field_type = read_white_noise)
+    std::string ic_white_noise_filename; // raw float32 W(x) on the ic_nmesh^3 grid, C order, axis 0 = x
+
     // Particles
     int particle_Npart_1D;             // Number of particles per dimension (total is N^3)
     double particle_allocation_factor; // Allocation this many more particles
@@ -242,6 +246,7 @@ class NBodySimulation {
     /// This method simply read particles and uses them for the simulation
     void read_ic();
     void read_phases(FFTWGrid<NDIM> & delta_fourier);
+    void read_white_noise(FFTWGrid<NDIM> & delta_fourier);
 
     /// Run simulation
     void run();
@@ -536,6 +541,9 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
         ic_reconstruct_dimless_smoothing_scale = param.get<double>("ic_reconstruct_dimless_smoothing_scale");
         ic_reconstruct_interlacing = param.get<bool>("ic_reconstruct_interlacing");
     }
+    if (ic_random_field_type == "read_white_noise") {
+        ic_white_noise_filename = param.get<std::string>("ic_white_noise_filename");
+    }
 
     if (FML::ThisTask == 0) {
         std::cout << "ic_type_of_input                         : " << ic_type_of_input << "\n";
@@ -563,6 +571,9 @@ void NBodySimulation<NDIM, T>::read_parameters(ParameterMap & param) {
             std::cout << "ic_reconstruct_dimless_smoothing_scale   : " << ic_reconstruct_dimless_smoothing_scale
                       << "\n";
             std::cout << "ic_reconstruct_interlacing               : " << ic_reconstruct_interlacing << "\n";
+        }
+        if (ic_random_field_type == "read_white_noise") {
+            std::cout << "ic_white_noise_filename                  : " << ic_white_noise_filename << "\n";
         }
     }
 
@@ -1063,6 +1074,60 @@ void NBodySimulation<NDIM, T>::init() {
         // Do nothing, we don't need delta_ini as we read in particles in read_ic 
     } else if (ic_random_field_type == "read_phases") {
         // Do nothing, we compute delta_ini in read_phases
+    } else if (ic_random_field_type == "read_white_noise") {
+
+        // The white noise W of a reference simulation instead of a random draw. As for "gaussian",
+        // delta(k, zini) = W(k) * sqrt(P(k, zini) / V) with <|W(k)|^2> = 1, and the k = 0 mode and the
+        // Nyquist planes set to zero. ic_fix_amplitude sets |W(k)| = 1 (ic_reverse_phases is applied below).
+        read_white_noise(delta_ini_fourier);
+
+        auto Pofk_of_kBox_over_volume = [&](double kBox) {
+            return power_initial_spline(kBox / simulation_boxsize) / std::pow(simulation_boxsize, NDIM);
+        };
+        const int Nmesh = delta_ini_fourier.get_nmesh();
+        const auto Local_x_start = delta_ini_fourier.get_local_x_start();
+        double sum_W2 = 0.0, nmodes = 0.0, nzero = 0.0;
+        for (int islice = 0; islice < delta_ini_fourier.get_local_nx(); islice++) {
+            for (auto && fourier_index : delta_ini_fourier.get_fourier_range(islice, islice + 1)) {
+                auto coord = delta_ini_fourier.get_fourier_coord_from_index(fourier_index);
+                coord[0] += Local_x_start;
+                bool is_zero_mode = true, is_nyquist = false;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    if (coord[idim] != 0)
+                        is_zero_mode = false;
+                    if (coord[idim] == Nmesh / 2)
+                        is_nyquist = true;
+                }
+                auto value = delta_ini_fourier.get_fourier_from_index(fourier_index);
+                if (is_zero_mode or is_nyquist) {
+                    delta_ini_fourier.set_fourier_from_index(fourier_index, 0.0);
+                    continue;
+                }
+                const double absvalue = std::abs(value);
+                if (absvalue > 0.0) {
+                    sum_W2 += absvalue * absvalue;
+                    nmodes += 1.0;
+                } else {
+                    nzero += 1.0;
+                }
+                if (ic_fix_amplitude and absvalue > 0.0)
+                    value /= absvalue;
+
+                [[maybe_unused]] double kmag;
+                [[maybe_unused]] std::array<double, NDIM> kvec;
+                delta_ini_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                value *= std::sqrt(Pofk_of_kBox_over_volume(kmag));
+                delta_ini_fourier.set_fourier_from_index(fourier_index, value);
+            }
+        }
+        FML::SumOverTasks(&sum_W2);
+        FML::SumOverTasks(&nmodes);
+        FML::SumOverTasks(&nzero);
+        if (FML::ThisTask == 0) {
+            std::cout << "# White noise read: <|W(k)|^2> = " << sum_W2 / nmodes << " over " << nmodes
+                      << " non-zero modes (" << nzero << " zero modes, e.g. outside a cutoff sphere)\n";
+        }
+
     } else {
         throw std::runtime_error("Unknown ic_random_field_type [" + ic_random_field_type + "]");
     }
@@ -1689,6 +1754,51 @@ void NBodySimulation<NDIM, T>::read_phases(FFTWGrid<NDIM> & delta_fourier) {
     // generate the IC, will just be noise and will lead to problems so these modes needs to be killed
     FML::GRID::smoothing_filter_fourier_space(
         delta_fourier, ic_reconstruct_dimless_smoothing_scale, ic_reconstruct_smoothing_filter);
+}
+
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::read_white_noise(FFTWGrid<NDIM> & delta_fourier) {
+    if (FML::ThisTask == 0) {
+        std::cout << "\n";
+        std::cout << "#=====================================================\n";
+        std::cout << "# Reading white noise from [" + ic_white_noise_filename + "]\n";
+        std::cout << "#=====================================================\n";
+    }
+
+    // The file is the real-space field W(x) on the full Nmesh^NDIM grid: raw float32, C order,
+    // axis 0 = x (the slab axis of FFTWGrid). Each task reads only its own x-slabs.
+    const int Nmesh = delta_fourier.get_nmesh();
+    const long long nperslice = FML::power(Nmesh, NDIM - 1);
+    const long long nbytes_expected = nperslice * Nmesh * static_cast<long long>(sizeof(float));
+
+    std::ifstream fp(ic_white_noise_filename, std::ios::binary | std::ios::ate);
+    FML::assert_mpi(fp.good(), ("[read_white_noise] Cannot open " + ic_white_noise_filename).c_str());
+    const long long nbytes = static_cast<long long>(fp.tellg());
+    FML::assert_mpi(nbytes == nbytes_expected,
+                    ("[read_white_noise] " + ic_white_noise_filename + " has " + std::to_string(nbytes) +
+                        " bytes, expected " + std::to_string(nbytes_expected) + " (float32 on a grid of ic_nmesh = " +
+                        std::to_string(Nmesh) + ")")
+                        .c_str());
+
+    delta_fourier.set_grid_status_real(true);
+    std::vector<float> buffer(nperslice);
+    std::array<int, NDIM> coord;
+    for (int islice = 0; islice < delta_fourier.get_local_nx(); islice++) {
+        const long long ix = delta_fourier.get_local_x_start() + islice;
+        fp.seekg(ix * nperslice * static_cast<long long>(sizeof(float)));
+        fp.read(reinterpret_cast<char *>(buffer.data()), nperslice * sizeof(float));
+        FML::assert_mpi(fp.good(), ("[read_white_noise] Read error in " + ic_white_noise_filename).c_str());
+        coord[0] = islice;
+        for (long long i = 0; i < nperslice; i++) {
+            long long rest = i;
+            for (int idim = NDIM - 1; idim >= 1; idim--) {
+                coord[idim] = rest % Nmesh;
+                rest /= Nmesh;
+            }
+            delta_fourier.set_real(coord, buffer[i]);
+        }
+    }
+    delta_fourier.fftw_r2c();
 }
 
 template <int NDIM, class T>
