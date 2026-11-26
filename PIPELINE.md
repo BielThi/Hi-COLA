@@ -209,7 +209,9 @@ MPICC=cc CFLAGS=-Wno-error=int-conversion pip install --no-build-isolation -c co
 `hicola` env activated. The Makefile (the one file changed inside `HiCOLA/`) takes FFTW, GSL
 and Lua from the active env (`$(CONDA_PREFIX)`) and FML from the clone it is in, so every
 clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL, Lua) are
-the `USE_*` lines at the top of the Makefile. The Makefile also writes the env's library folder
+the `USE_*` lines at the top of the Makefile; `USE_LONG_IDS = true` writes 8-byte particle IDs in the
+Gadget snapshots (32 bytes per particle instead of 28; snapshots made before 2026-11-26 on jed have
+4-byte IDs). The Makefile also writes the env's library folder
 into the binary (rpath), so `nbody` uses the env's FFTW, GSL and Lua even without the env active
 (Cray's `mpicxx` doesn't add it, unlike conda's); MPI is the one of `mpicxx`.
 
@@ -509,7 +511,9 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   Gadget snapshot with the run's `pofk_nmesh`, `pofk_interlacing` and `pofk_subtract_shotnoise`,
   only the method changed (NGP, CIC, TSC, PCS, PQS). Columns k [h/Mpc] (mean |k| of the modes of the
   bin), P(k) [(Mpc/h)³]. The job also measures the run's own method and prints its difference to
-  `pofk_z<z>.txt`.
+  `pofk_z<z>.txt`. FML's Gadget reader has the particle ID width fixed at compile time, so the
+  Makefile builds `pofk_snapshot` (4-byte IDs) and `pofk_snapshot_longids` (8-byte IDs); the job
+  reads the width from the snapshot's ID block and runs the matching one (printed in the log).
 - **Member particles** `halos_fof_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
   a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
   halo, `x y z` [Mpc/h], `vx vy vz` [peculiar km/s], `halo_id` = row of the halo catalog of the same

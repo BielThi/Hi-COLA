@@ -57,14 +57,43 @@ if [ "$TARGET" = standalone ]; then
     echo "The P(k) job needs a run matched to a reference simulation, not $RUN_LABEL" >&2
     exit 1
 fi
-PROGRAM="$HICOLA_ROOT/scripts/pofk_snapshot/pofk_snapshot"
-if [ ! -x "$PROGRAM" ]; then
-    echo "$PROGRAM is not built: make -C scripts/pofk_snapshot (hicola env)" >&2
-    exit 1
-fi
 SNAPSHOT_DIR="$OUTPUT_FOLDER/snapshot_${SIM_NAME}_z${REDSHIFT}"
 if ! ls "$SNAPSHOT_DIR/gadget_z${REDSHIFT}".* > /dev/null 2>&1; then
     echo "No Gadget snapshot $SNAPSHOT_DIR/gadget_z${REDSHIFT}.*" >&2
+    exit 1
+fi
+# Particle ID width of the snapshot (4 or 8 bytes, set by USE_LONG_IDS when nbody was built): the
+# size of the ID block of the first file / its number of particles. FML's reader has the width fixed
+# at compile time, so the program built for it is used.
+ID_BYTES=$(python - "$SNAPSHOT_DIR/gadget_z${REDSHIFT}.0" <<'EOF'
+import sys
+import numpy as np
+with open(sys.argv[1], "rb") as f:
+    def record():
+        """Size of the next Fortran record, skipping it (start and end markers must agree)."""
+        size = int(np.fromfile(f, "<i4", 1)[0])
+        start = f.tell()
+        head = np.fromfile(f, "<u4", 6) if size == 256 else None
+        f.seek(start + size)
+        assert int(np.fromfile(f, "<i4", 1)[0]) == size, f"corrupt record in {sys.argv[1]}"
+        return size, head
+    size, npart = record()
+    assert size == 256 and npart is not None, f"{sys.argv[1]}: not a GADGET-1 file (header of {size} bytes)"
+    n = int(npart.sum())
+    assert n > 0, f"{sys.argv[1]} has no particles"
+    record(); record()   # positions, velocities
+    size, _ = record()   # IDs
+    assert size in (4 * n, 8 * n), f"{sys.argv[1]}: ID block of {size} bytes for {n} particles"
+    print(size // n)
+EOF
+)
+if [ "$ID_BYTES" = 8 ]; then
+    PROGRAM="$HICOLA_ROOT/scripts/pofk_snapshot/pofk_snapshot_longids"
+else
+    PROGRAM="$HICOLA_ROOT/scripts/pofk_snapshot/pofk_snapshot"
+fi
+if [ ! -x "$PROGRAM" ]; then
+    echo "$PROGRAM is not built: make -C scripts/pofk_snapshot (hicola env)" >&2
     exit 1
 fi
 flag() { [ "$1" = true ] && echo 1 || echo 0; }
@@ -74,7 +103,7 @@ hicola_print_run "$RUN_FILE"
 echo "Snapshot:       $SNAPSHOT_DIR/gadget_z${REDSHIFT}.*"
 echo "P(k):           methods $METHODS; the run's nmesh $POFK_NMESH, interlacing $POFK_INTERLACING,"
 echo "                shot noise subtracted $POFK_SUBTRACT_SHOTNOISE (Hi-COLA's own: $POFK_METHOD)"
-echo "Program:        $PROGRAM"
+echo "Program:        $PROGRAM ($ID_BYTES-byte particle IDs)"
 echo "Resources:      ${SLURM_JOB_NUM_NODES:-1} nodes, ${SLURM_NTASKS:-1} MPI tasks"
 echo "================================================================"
 

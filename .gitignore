@@ -8,6 +8,7 @@ __pycache__/
 *.o
 HiCOLA/FML/COLASolver/nbody
 scripts/pofk_snapshot/pofk_snapshot
+scripts/pofk_snapshot/pofk_snapshot_longids
 HiCOLA/*.e[0-9]*
 HiCOLA/*.o[0-9]*
 Notebooks/slides/
