@@ -386,6 +386,23 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 - Outside the job scripts and run files, the only inputs are the paths and env name in
   `jobs/hicola_env.sh`, and those are printed in every log.
 
+### White noise of an AbacusSummit simulation (`ph<n>` realizations)
+
+`jobs/white_noise_abacus.sh` (set for `small_c000_ph3000`, jed's `#SBATCH` lines) regenerates the
+simulation's ICs with zeldovich-PLT from the seed and parameters of its IC header, checks them
+against Abacus's stored IC density, and writes the white noise read by
+`ic_random_field_type = "read_white_noise"`. Inputs in `hicola_data/reference/<target>/LCDM/Box1/raw/ic/`
+(`ic_dens_N576.asdf`, `CLASS_power`; hicola_data/README.md). The `highbase_c000_ph100` file was made
+the same way on Perlmutter (2026-11-16, by hand). zeldovich-PLT is built once, in its own env:
+
+```bash
+conda create -n zeldovich -c conda-forge gsl cxx-compiler ninja 'fftw=*=nompi*' flex 'meson>=1.1' 'bison>=3' pkg-config
+git clone https://github.com/abacusorg/zeldovich-PLT ~/zeldovich-PLT
+cd ~/zeldovich-PLT && git checkout 7075324        # version used for highbase_c000_ph100
+conda activate zeldovich
+meson setup build && meson compile -C build       # -Dmarch=native by default: build on a compute node
+```
+
 ## 7. Halo finder and measurements
 
 - **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI via `srun`): linking
