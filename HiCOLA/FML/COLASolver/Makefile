@@ -30,6 +30,10 @@ USE_GSL          = true
 # Use LUA (required to use parameterfile)
 # One can edit ReadParameters.h to do without it
 USE_LUA          = true
+# Write 8-byte particle IDs in GADGET snapshots (FML/GadgetUtils, GADGET_LONG_INT_IDS). Needed
+# above 2^31 particles (e.g. 2048^3): with 4-byte IDs they overflow and repeat in the files.
+# Snapshots are then 32 bytes per particle instead of 28; readers must take 8-byte IDs.
+USE_LONG_IDS     = true
 
 #===================================================
 # Include and library paths
@@ -59,8 +63,9 @@ LUA_LINK       = -llua -ldl
 # Compile up all library defines from options above
 #===================================================
 
-INC     = -I$(FML_INCLUDE) 
-LIB     =
+INC     = -I$(FML_INCLUDE)
+# Also find the env's libraries at run time (system MPI wrappers, e.g. Cray's, don't add this)
+LIB     = -Wl,-rpath,$(CONDA_PREFIX)/lib
 LINK    = 
 OPTIONS = 
 
@@ -105,6 +110,10 @@ LIB     += -L$(GSL_LIB)
 LINK    += $(GSL_LINK)
 endif
 
+ifeq ($(USE_LONG_IDS),true)
+OPTIONS += -DGADGET_LONG_INT_IDS
+endif
+
 ifeq ($(USE_LUA),true)
 OPTIONS += -DUSE_LUA
 INC     += -I$(LUA_INCLUDE)
@@ -133,7 +142,7 @@ Main.o: Makefile src/Main.cpp src/Cosmology.h src/GravityModel.h src/ReadParamet
 Global.o: $(FML_INCLUDE)/FML/Global/Global.cpp $(FML_INCLUDE)/FML/Global/Global.h
 Spline.o: $(FML_INCLUDE)/FML/Spline/Spline.cpp $(FML_INCLUDE)/FML/Spline/Spline.h
 ODESolver.o: $(FML_INCLUDE)/FML/ODESolver/ODESolver.cpp $(FML_INCLUDE)/FML/ODESolver/ODESolver.h
-GadgetUtils.o: $(FML_INCLUDE)/FML/GadgetUtils/GadgetUtils.cpp $(FML_INCLUDE)/FML/GadgetUtils/GadgetUtils.h
+GadgetUtils.o: Makefile $(FML_INCLUDE)/FML/GadgetUtils/GadgetUtils.cpp $(FML_INCLUDE)/FML/GadgetUtils/GadgetUtils.h
 ParameterMap.o: $(FML_INCLUDE)/FML/ParameterMap/ParameterMap.cpp $(FML_INCLUDE)/FML/ParameterMap/ParameterMap.h
 FileUtils.o: $(FML_INCLUDE)/FML/FileUtils/FileUtils.cpp $(FML_INCLUDE)/FML/FileUtils/FileUtils.h
 

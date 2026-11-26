@@ -7,6 +7,7 @@
 --   SIM_NAME OUTPUT_FOLDER RUN_ROOT BOXSIZE REDSHIFTS
 --                  RUN_ROOT = output_folder without /<target>/<model>/<realization>/
 --   NPART NSTEPS Z_INIT GRAVITY COSMOLOGY IC_FILE IC_SEED IC_FIXED IC_INVERTED   (for the job logs)
+--   MESHES         sizes of the FFTW grids the run allocates (job layout check in backend.sh)
 --   COSMO_H COSMO_OMEGA_CDM COSMO_OMEGA_B COSMO_OMEGA_MNU COSMO_OMEGA_LAMBDA COSMO_TCMB COSMO_NEFF COSMO_NS   (numbers)
 --
 -- Fails if simulation_name or output_folder do not follow that naming: the halo finder and
@@ -41,8 +42,12 @@ if folder == "standalone" then
   info.RUN_LABEL = "standalone/" .. stem
   suffix = "/standalone/" .. stem .. "/"
 else
+  -- realization: s<seed>[...] (Hi-COLA's random seed) or ph<n>[...] (phases of a reference simulation)
   local model, realization = stem:match("^(.+)_(s%d+[%w%-]*)$")
-  if not model then fail("file name should be <model>_<realization>.lua, e.g. nDGP_N1.2_s1234-fixed.lua") end
+  if not model then model, realization = stem:match("^(.+)_(ph%d+[%w%-]*)$") end
+  if not model then
+    fail("file name should be <model>_<realization>.lua, e.g. nDGP_N1.2_s1234-fixed.lua or LCDM_ph100.lua")
+  end
   info.TARGET, info.MODEL, info.REALIZATION = folder, model, realization
   info.RUN_LABEL = folder .. "/" .. model .. "/" .. realization
   local expected = folder .. "_" .. model .. "_" .. realization
@@ -86,9 +91,20 @@ info.IC_SEED = ic_random_seed
 info.IC_FIXED = ic_fix_amplitude
 info.IC_INVERTED = ic_reverse_phases
 
+-- Grid sizes of the FFTW grids the run allocates (Hi-COLA requires the number of MPI tasks to
+-- divide each of them, FML/FFTWGrid/FFTWGrid.h); used by jobs/backend.sh to check the job layout
+local meshes = { ic_nmesh, force_nmesh }
+if pofk then meshes[#meshes + 1] = pofk_nmesh end
+if pofk_multipole then meshes[#meshes + 1] = pofk_multipole_nmesh end
+if bispectrum then meshes[#meshes + 1] = bispectrum_nmesh end
+if fof and (fof_nmesh_max or 0) > 0 then meshes[#meshes + 1] = fof_nmesh_max end
+local mesh_strings = {}
+for i, n in ipairs(meshes) do mesh_strings[i] = string.format("%d", n) end
+info.MESHES = table.concat(mesh_strings, " ")
+
 for _, key in ipairs({ "RUN_LABEL", "TARGET", "MODEL", "REALIZATION", "SIM_NAME", "OUTPUT_FOLDER", "RUN_ROOT", "BOXSIZE",
                        "REDSHIFTS", "NPART", "NSTEPS", "Z_INIT", "GRAVITY", "COSMOLOGY", "IC_FILE", "IC_SEED",
-                       "IC_FIXED", "IC_INVERTED", "COSMO_H", "COSMO_OMEGA_CDM", "COSMO_OMEGA_B",
+                       "IC_FIXED", "IC_INVERTED", "MESHES", "COSMO_H", "COSMO_OMEGA_CDM", "COSMO_OMEGA_B",
                        "COSMO_OMEGA_MNU", "COSMO_OMEGA_LAMBDA", "COSMO_TCMB", "COSMO_NEFF", "COSMO_NS" }) do
   print(key .. "=" .. quote(info[key]))
 end

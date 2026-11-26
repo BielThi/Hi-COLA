@@ -268,6 +268,13 @@ void read_parameterfile(ParameterMap & param, std::string filename) {
         param["ic_reconstruct_interlacing"] = lfp.read_bool("ic_reconstruct_interlacing", false, OPTIONAL);
     }
 
+    if (param.get<std::string>("ic_random_field_type") == "read_white_noise") {
+        //=============================================================
+        // White noise of a reference simulation, used instead of a random draw
+        //=============================================================
+        param["ic_white_noise_filename"] = lfp.read_string("ic_white_noise_filename", "", REQUIRED);
+    }
+
     //=============================================================
     // Force calculation
     //=============================================================

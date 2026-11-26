@@ -20,7 +20,7 @@ this repository.
 
 Contents: 1 quick start · 2 design rules · 3 where things live · 4 software setup · 5 runs and
 their names · 6 running jobs · 7 halo finder and measurements · 8 data and file formats ·
-9 notebooks · 10 adding runs or reference simulations · 11 another machine · 12 the jed cluster ·
+9 notebooks · 10 adding runs or reference simulations · 11 another machine · 12 the cluster (Perlmutter) ·
 13 troubleshooting · 14 known issues · 15 history
 
 ## 1. Quick start: one run, end to end
@@ -179,11 +179,39 @@ built against it (`MPICC="cc -shared" pip install --no-binary=mpi4py mpi4py`), F
 system (`cray-fftw`) and the backend Makefile and launchers change accordingly. This is not set up
 in the repository.
 
+*Local to the Perlmutter clone (not committed):* the env there uses Cray MPICH, with jed's
+versions of everything else. FFTW is 3.3.8 built from source into the env against Cray MPICH
+(not `cray-fftw`, so the Makefile keeps taking it from `$CONDA_PREFIX`; it does not appear in
+`conda list`), GSL is 2.4; the Makefile adds an rpath to the env's `lib`. Built in November 2026:
+
+```bash
+module load conda                  # PrgEnv-gnu and cray-mpich are loaded by default
+conda create -n hicola --override-channels -c conda-forge python=3.11 pip setuptools wheel cython \
+    numpy=1.26.4 scipy=1.17.1 h5py=3.15.1 hdf5plugin=6.0.0 matplotlib=3.10.8 pandas=3.0.2 \
+    astropy=7.2.0 sympy=1.14.0 configobj=5.0.9 gsl=2.4 lua=5.5 ipykernel
+conda activate hicola
+MPICC="cc -shared" pip install --no-binary=mpi4py mpi4py==4.1.2
+# https://www.fftw.org/fftw-3.3.8.tar.gz (md5 8aac833c943d8e90d51b697b27d4384d), in its folder:
+./configure --prefix=$CONDA_PREFIX CC=cc MPICC=cc --enable-shared --enable-mpi --enable-threads \
+    --enable-openmp --enable-sse2 --enable-avx --enable-avx2 && make -j 16 && make install
+# git packages cloned and checked out at the commits of the table above, installed from the clones;
+# USE_GPU=0: CPU-only Corrfunc (the login nodes have nvcc); pip -c pins the conda versions above
+USE_GPU=0 MPICC=cc pip install -c constraints.txt numba==0.65.1 halotools==0.9.4 abacusutils==2.1.2 \
+    fitsio==1.3.0 pynbody==2.4.2 stochopy==2.3.0 pyyaml==6.0.3 jax==0.7.1 jaxlib==0.7.1 jaxdecomp \
+    jupyter nbstripout ./lsstypes ./pyclass ./Corrfunc ./pycorr ./mpytools ./cosmoprimo
+pip install --no-deps ./jax-power            # its lsstypes requirement is an unpinned git URL
+MPICC=cc CFLAGS=-Wno-error=int-conversion pip install --no-build-isolation -c constraints.txt nbodykit==0.3.16
+```
+`-Wno-error=int-conversion` lets pfft-python build with GCC 14. Launchers are plain `srun`
+(section 12).
+
 **Backend binary** `HiCOLA/FML/COLASolver/nbody`: `cd HiCOLA/FML/COLASolver && make` with the
 `hicola` env activated. The Makefile (the one file changed inside `HiCOLA/`) takes FFTW, GSL
 and Lua from the active env (`$(CONDA_PREFIX)`) and FML from the clone it is in, so every
 clone builds against its own code. Build options (MPI, OpenMP, FFTW threads, GSL, Lua) are
-the `USE_*` lines at the top of the Makefile.
+the `USE_*` lines at the top of the Makefile. The Makefile also writes the env's library folder
+into the binary (rpath), so `nbody` uses the env's FFTW, GSL and Lua even without the env active
+(Cray's `mpicxx` doesn't add it, unlike conda's); MPI is the one of `mpicxx`.
 
 **HODDIES**: the fork `github.com/BielThi/HODDIES`, branch `main`, checked out next to
 this repository (`~/HODDIES`). The HOD job and notebooks import it from there (`$HODDIES_ROOT`), not
@@ -206,9 +234,9 @@ parallelism off) differ from dev-v2 ones and must not be mixed; the HOD jobs rec
 branch and commit in each output's `.json` (outputs made before 2026-10-26 name the branch
 `hicola-dev-v2`, since merged into the fork's `main`).
 
-**hi_class**: the env on jed has a `classy` built from `~/hi_class_public`
+**hi_class**: the env on jed had a `classy` built from `~/hi_class_public`
 (`miguelzuma/hi_class_public`, commit `50f447c4`). Nothing in the pipeline uses it any more
-(CLASS is used through cosmoprimo/`pyclass`); not needed on a new machine.
+(CLASS is used through cosmoprimo/`pyclass`); not installed on Perlmutter.
 
 **nbstripout** removes notebook outputs from what git stores (the files on disk keep them).
 It is declared in `.gitattributes`; each new clone runs `nbstripout --install` once (with the
@@ -225,9 +253,9 @@ P(k)) and named by a **model** and a **realization**:
 
 | | values |
 |---|---|
-| target | `COLA_NM4096`: 1024 Mpc/h, 1024³ particles, Euclid cosmology, Bart's initial P(k), z_init 19, outputs z = 1.65, 1.4, 1.2, 1.0 · `Abacus_Small`: 500 Mpc/h, 1024³ particles, AbacusSummit c000 cosmology, its initial P(k), z_init 49, outputs z = 1.1, 0.8, 0.5. Both 30 time steps |
+| target | `COLA_NM4096`: 1024 Mpc/h, 1024³ particles, Euclid cosmology, Bart's initial P(k), z_init 19, outputs z = 1.65, 1.4, 1.2, 1.0 · `Abacus_Small`: 500 Mpc/h, 1024³ particles, AbacusSummit c000 cosmology, its initial P(k), z_init 49, outputs z = 1.1, 0.8, 0.5 · `Abacus_Highbase`: 1000 Mpc/h, 2048³ particles (same spacing as Abacus_Small), c000, white noise (phases and realized amplitudes) of AbacusSummit highbase_c000_ph100, Abacus's own initial P(k) at z = 99 (`abacus_cosm000_ic_pk_z99.000.dat`, `scripts/make_abacus_ic_pk.py`), z_init 99, outputs z = 1.1, 0.8, 0.5. All 30 time steps |
 | model | `LCDM` (`gravity_model = "GR"`) · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = `gravity_model = "DGP"` with `gravity_model_dgp_rcH0overc = 1.2` (Hi-COLA's built-in DGP) · suffix `_high` = 100 time steps instead of 30, e.g. `LCDM_high`, `nDGP_N1.2_high` |
-| realization | `s<seed>` · `s<seed>-fixed` (`ic_fix_amplitude = true`) · `s<seed>-fixed-inv` (also `ic_reverse_phases = true`); the pair -fixed / -fixed-inv is averaged as "paired-fixed" |
+| realization | `s<seed>` · `s<seed>-fixed` (`ic_fix_amplitude = true`) · `s<seed>-fixed-inv` (also `ic_reverse_phases = true`); the pair -fixed / -fixed-inv is averaged as "paired-fixed" · `ph<n>`: the white noise of the reference simulation's phase set `ph<n>` instead of a random draw (`ic_random_field_type = "read_white_noise"`), with the same `-fixed` / `-inv` suffixes |
 
 ```
 HiCOLA/Parameter_files/Backend_parameter_files/
@@ -259,7 +287,7 @@ The pipeline finds a run's outputs by its name, so a run file must follow this n
 
 | in the run file | must be |
 |---|---|
-| location | `<target>/<model>_<realization>.lua` (realization starts with `s<digits>`) |
+| location | `<target>/<model>_<realization>.lua` (realization starts with `s<digits>` or `ph<digits>`) |
 | `simulation_name` | `"<target>_<model>_<realization>"` |
 | `output_folder` | `"<run root>/<target>/<model>/<realization>/"`, run root `/scratch/biel/Hi-COLA_Output` on jed |
 
@@ -287,25 +315,47 @@ snapshot_<simulation_name>_z<z>/           one per output redshift
 Each script in `jobs/` has a **user parameters** block at the top: edit it, then submit the
 script with `sbatch`, from any folder. Paths in the parameter blocks are relative to the
 Hi-COLA folder; a file given on the command line is relative to where you submit. The
-`#SBATCH` lines are the production settings on jed; edit them in the script or override them
+`#SBATCH` lines are the production settings on Perlmutter (section 12); edit them in the script or override them
 on the command line.
 
 | script | parameters | resources (default) | run with |
 |---|---|---|---|
-| `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
-| `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
-| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
-| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `HARTLAP_NREAL`, `FIT_R_MIN`, `FIT_R_MAX`, `DATA_VECTOR`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
-| `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
-| `hmf_abacus.sh` | `REDSHIFT`, `MODEL`, `CLEANED`, `MASS_GRID` | 1 task, 4 threads, 24 GB, 30 min (takes ~30 s) | `sbatch jobs/hmf_abacus.sh` |
-| `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
+| `backend.sh` | `RUN_FILE` | 8 whole nodes × 64 tasks × 2 OpenMP threads, 5 h (2048³ runs: see below) | `sbatch jobs/backend.sh` |
+| `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 whole nodes, 512 tasks, 4.5 h | `sbatch jobs/halo_finder.sh` |
+| `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h, QOS `shared` | `sbatch jobs/hod_mock.sh` |
+| `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `HARTLAP_NREAL`, `FIT_R_MIN`, `FIT_R_MAX`, `DATA_VECTOR`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h, QOS `shared` | `sbatch jobs/hod_fit.sh` |
+| `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h, QOS `shared` | `sbatch jobs/power_spectrum_abacus.sh` |
+| `hmf_abacus.sh` | `REDSHIFT`, `MODEL`, `CLEANED`, `MASS_GRID` | 1 task, 4 threads, 24 GB, 30 min (takes ~30 s), QOS `shared` | `sbatch jobs/hmf_abacus.sh` |
+| `frontend.sh` | `MODEL_INI`, `COSMOLOGY_INI` | 1 task, 6 GB, 1 h, QOS `shared` | `sbatch jobs/frontend.sh` or `bash jobs/frontend.sh` |
 
 ```bash
 sbatch ~/Hi-COLA/jobs/backend.sh                              # from anywhere
 sbatch jobs/backend.sh <run.lua>                              # a run file on the command line replaces RUN_FILE
-sbatch -N 2 -n 128 --time=1:00:00 jobs/backend.sh             # other resources
+sbatch -N 2 --ntasks-per-node=64 --cpus-per-task=4 --time=1:00:00 jobs/backend.sh   # other resources
 sbatch --job-name=LCDM_s1234 jobs/backend.sh                  # other job name (= log file name)
 sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once the backend is done
+```
+
+Backend job layout (`backend.sh`, Perlmutter):
+- MPI tasks = `-N` × `--ntasks-per-node`; Hi-COLA needs the number of tasks to divide every
+  grid size of the run (`ic_nmesh`, `force_nmesh`, `pofk_nmesh`, ...). `backend.sh` checks this
+  before starting `nbody` (grid sizes printed as `Grids:` in the log, from `run_info.lua`).
+- `--cpus-per-task` = 256 / tasks per node (hardware threads); `backend.sh` runs
+  `--cpus-per-task / 2` OpenMP threads per task, one per core, and pins the tasks to their cores.
+- Memory: the per-step `Peak RSS` in the Hi-COLA log misses the peak at the outputs (particle
+  P(k)); `sacct -j <job id> -o JobID,MaxRSS` gives the true per-task peak.
+
+| target | layout | measured | time limit |
+|---|---|---|---|
+| `Abacus_Small`, `COLA_NM4096` (1024³) | default: `-N 8 --ntasks-per-node=64 --cpus-per-task=4` | | 5 h |
+| `Abacus_Highbase` (2048³, force mesh 6144³) | `-N 64 --ntasks-per-node=16 --cpus-per-task=16` (1024 tasks × 8 threads) | nDGP: peak 16.7 GB per task (~270 GB per node), ~100 s per step (31 force steps + 3 outputs ≈ 1 h); LCDM ~2.8× cheaper force (576³ test). 32 nodes × 32 tasks runs out of memory at the first output (November 2026) | nDGP `2:00:00`, LCDM `1:30:00` |
+
+```bash
+# Abacus_Highbase production runs (64 nodes; about 64 node-hours for nDGP, 30 for LCDM)
+sbatch -N 64 --ntasks-per-node=16 --cpus-per-task=16 --time=2:00:00 --job-name=nDGP_N1.2_ph100 \
+    jobs/backend.sh HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Highbase/nDGP_N1.2_ph100.lua
+sbatch -N 64 --ntasks-per-node=16 --cpus-per-task=16 --time=1:30:00 --job-name=LCDM_ph100 \
+    jobs/backend.sh HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Highbase/LCDM_ph100.lua
 ```
 
 Settings used so far, per target (set them in `halo_finder.sh` for each submission):
@@ -338,7 +388,7 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
 
 ## 7. Halo finder and measurements
 
-- **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI via `srun --mpi=pmix`): linking
+- **FoF** (`scripts/run_halo_catalog.py`, nbodykit, MPI via `srun`): linking
   length and minimum members from `halo_finder.sh`. Halo masses are FoF masses (members × particle
   mass); `RADIUS_MDEF` is only the mass definition assumed when nbodykit derives each halo's radius and
   concentration from that mass (section 8). The box size and the
@@ -400,7 +450,12 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
 
 - Reference data: `COLA_NM4096` (Bart's COLA boxes; `LCDM` and `nDGP_N1.2`, Box1–10,
   z = 1.65, 1.4, 1.2, 1.0, PS and HMF; spherical-overdensity HMF, see `papers/Bart.pdf`) and
-  `Abacus_Small` (AbacusSummit `small_c000_ph3000`, `LCDM`, Box1, z = 0.5, PS only).
+  `Abacus_Small` (AbacusSummit `small_c000_ph3000`, `LCDM`, Box1, z = 0.5, PS only) and
+  `DEGRACE_DGP` (MG-GLAM, 1024 Mpc/h, Planck 2015; `LCDM` and `nDGP_N1.0`, Box1–100, z = 0.999,
+  0.529, 0.483, PS only; `scripts/make_degrace_dgp_reference.py`). For runs matched to it: initial
+  P(k) `degrace_dgp_PkTable_z0.000.dat` (`scripts/make_degrace_dgp_ic_pk.py`) and the white noise
+  of boxes 2–6 (`jobs/white_noise_degrace_dgp.sh`); its open data issues are listed in
+  `hicola_data/README.md`.
 - Redshifts are always written with 3 decimals (`z1.650`), as in Hi-COLA's own file names.
 - **PS files**: text, `#` header lines, columns k [h/Mpc], P(k) [(Mpc/h)³], then optional
   columns (P_linear for Hi-COLA, N_modes for Abacus).
@@ -526,15 +581,10 @@ imports:
 The HOD notebooks need the halo catalogs, which only exist on scratch (they are not kept).
 In the comparison notebooks, a run that doesn't exist is skipped with a message.
 
-**Jupyter on a compute node** (heavy notebooks need more memory than the login node):
-
-```bash
-Sinteract -n 72 -c 1 -m 256G -t 04:00:00 -p academic
-cd ~/Hi-COLA
-conda activate hicola
-ipnport=$(shuf -i8000-9999 -n1)
-jupyter notebook --no-browser --port=${ipnport} --ip=$(hostname -i)
-```
+**Jupyter**: NERSC's JupyterHub (`https://jupyter.nersc.gov`) with the `hicola` kernel
+(registered once with `python -m ipykernel install --user --name hicola --display-name hicola`,
+env active). Heavy notebooks need more memory than a login node: start the server on an
+exclusive CPU node.
 
 Start the server inside the clone: kernels of a remote server (e.g. VSCode connected to it)
 start in the server's folder, and the notebooks find the repository (and through it the
@@ -566,8 +616,9 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 3. Machine-specific values written in full:
    - the scratch run root in the `output_folder` of the run files,
    - the log folder in the `#SBATCH -o/-e` lines of the job scripts,
-   - in `jobs/hicola_env.sh`, the default run root (`/scratch/$USER/...`) and where conda is
-     looked for (`$HOME/miniconda3`, `$HOME/anaconda3`, or a `conda` already on the PATH).
+   - the default run root (`/scratch/$USER/...`) in `jobs/hicola_env.sh` and
+     `scripts/hicola_paths.py`, and where `jobs/hicola_env.sh` looks for conda (a `conda`
+     already set up, the `conda` module, `$HOME/miniconda3`, `$HOME/anaconda3`).
 
    ```bash
    sed -i 's#/scratch/biel/Hi-COLA_Output#<new scratch path>#' HiCOLA/Parameter_files/Backend_parameter_files/*/*.lua
@@ -575,9 +626,8 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
    ```
    Export the scratch path as `HICOLA_RUN_ROOT` for the notebooks if it isn't
    `/scratch/$USER/Hi-COLA_Output`. A second clone on jed needs the log-folder `sed`.
-4. Adapt the other `#SBATCH` lines (partition, cores per node, `--exclusive`, memory per
-   core, time) to the cluster (section 12), and the launcher (`mpirun` in `backend.sh`,
-   `srun --mpi=pmix` in `halo_finder.sh`) if needed.
+4. Adapt the other `#SBATCH` lines (node type, QOS, account, memory, time) to the cluster
+   (section 12), and the launcher (`srun` in `backend.sh` and `halo_finder.sh`) if needed.
 
    The repository keeps **jed's** `#SBATCH` lines (and log paths). On another cluster (e.g.
    Perlmutter: `--account`, `--qos`, `--constraint` instead of `--partition`, logs under its
@@ -586,20 +636,33 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
    lines. New job scripts are committed with jed's values.
 5. Test with a small run: copy a run file with `particle_Npart_1D = 192`,
    `timestep_nsteps = {10}` and a test `output_folder`/`simulation_name` (keeping the naming),
-   then `sbatch -N 1 -n 16 --time=0:30:00 --mem-per-cpu=4G jobs/backend.sh <that file>` and
+   then `sbatch -N 1 -n 16 --time=0:30:00 --qos=debug jobs/backend.sh <that file>` and
    the halo finder on it; to keep the test out of `hicola_data`, export `HICOLA_DATA_ROOT` to
    a test folder before submitting (the job inherits it).
 
-## 12. The jed cluster (EPFL SCITAS)
+## 12. The cluster: Perlmutter (NERSC)
 
-- Partition `academic`: 72 cores and ~500 GB per node, at most 7000 MB per core
-  (`--mem-per-cpu` above that is refused at submission). The production jobs use 64 tasks per
-  node (8 × 64 = 512).
-- Scratch `/scratch/$USER` is not backed up and old files are deleted automatically.
-- SLURM creates a missing log folder; it runs a copy of the job script, which is why the jobs
-  ask SLURM (`scontrol show job`) for the original script path to find the repository.
-- `Sinteract` opens an interactive allocation (section 9). Jobs submitted from inside one
-  inherit `SLURM_MEM_*` variables; the job scripts unset them.
+- CPU nodes (`--constraint=cpu`): 128 cores (256 hardware threads) and ~500 GB per node.
+  Account `desi` (`desi_g` is for GPU nodes).
+- QOS `regular` gives whole nodes: no memory request is needed, and a `--mem-per-cpu` is
+  counted per hardware thread (256 per node) and refused. The 1024³ backend jobs use 64 tasks
+  per node (8 × 64 = 512) with 2 OpenMP threads each, ~7.8 GB per task; the 2048³ ones 64 nodes
+  × 16 tasks × 8 threads (section 6). QOS `shared` (part of a node, memory per CPU) for the
+  frontend and the Abacus P(k); QOS `debug` (≤ 30 min) for tests. `sbatch --test-only` checks a
+  job's requests without submitting it.
+- MPI is Cray MPICH (`cray-mpich` with `PrgEnv-gnu`, loaded by default), started with `srun`
+  (default MPI plugin, no `--mpi=`); there is no `mpirun`. `nbody` also needs the default
+  modules at run time (`libfabric`; `libcudart`, pulled in by Cray MPICH's GPU support).
+- conda comes from `module load conda`; `jobs/hicola_env.sh` loads it if needed.
+- Scratch `$SCRATCH` = `/pscratch/sd/<u>/$USER` is not backed up and files unused for 8 weeks
+  are deleted.
+- SLURM runs a copy of the job script, which is why the jobs ask SLURM (`scontrol show job`)
+  for the original script path to find the repository. The log folder must exist.
+- Interactive allocation: `salloc -N 1 -C cpu -q interactive -t 04:00:00 -A desi`. Jobs
+  submitted from inside one inherit `SLURM_MEM_*` variables; the job scripts unset them.
+- Before October 2026 the pipeline ran on jed (EPFL SCITAS): partition `academic`, 72 cores
+  per node, at most 7000 MB per core, `mpirun` for the backend, `srun --mpi=pmix` for the halo
+  finder, scratch `/scratch/biel`, repository in `/home/biel/Hi-COLA`.
 
 ## 13. Troubleshooting
 
@@ -611,10 +674,10 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 | halo-finder job `DependencyNeverSatisfied` | the backend job it waits for failed; read the backend log |
 | "halo velocities are not marked as peculiar velocities" | the halo catalog was made before the velocity fix (2026-10-14); rerun `jobs/halo_finder.sh` on that run and redshift |
 | `--mass-grid reference: there is no reference HMF` | `HMF_MASS_GRID="reference"` for a target/redshift without reference HMF; use `MIN MAX N` |
-| sbatch: `exceeds MaxMemPerCPU` | more than 7000 MB per core requested; lower `--mem-per-cpu`/`--mem` or add cores |
+| sbatch: `Memory required by task is not available` | a memory request in a `regular` (whole-node) job; remove `--mem-per-cpu`/`--mem` (section 12) |
 | notebook: "Skipping … No PS for …" | the run (or that redshift) doesn't exist on scratch nor in `hicola_data/hicola/` |
 | HOD notebook or job: missing `halos_fof_hoddies.npy` (or `halos_fof_particles.npy`) | run the halo finder on that run and redshift (`PARTICLE_FRACTION > 0` for the particles; the run must still be on scratch) |
-| `CondaError: Run 'conda init'` | conda not found as a shell function; `jobs/hicola_env.sh` looks in `$CONDA_EXE`, the PATH, `~/miniconda3`, `~/anaconda3` |
+| `CondaError: Run 'conda init'` | conda not found as a shell function; `jobs/hicola_env.sh` looks in `$CONDA_EXE`, the PATH, the `conda` module, `~/miniconda3`, `~/anaconda3` |
 
 ## 14. Known issues
 
@@ -640,6 +703,9 @@ with `lua jobs/run_info.lua <file>`. A new `nDGP_N<x>` model needs
 - `halos.ipynb` and `overdensity.ipynb` point to runs that were removed.
 
 ## 15. History
+
+Moved from jed (EPFL SCITAS) to Perlmutter (NERSC) in October 2026: new env and FFTW build
+(section 4), rpath in the `nbody` Makefile, paths, `#SBATCH` lines and launchers (section 12).
 
 Reorganised in October 2026 (commits `d3fb7a1` … `99bd72a`); `57ee534` is the last commit
 with the old layout, and older run files can be recovered from it (`git show 57ee534:<path>`).
