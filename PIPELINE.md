@@ -273,7 +273,9 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 │                  LCDM_high_s1234, nDGP_N1.2_high_s1234 (100 time steps),
 │                  LCDM_log_s1234, nDGP_N1.2_log_s1234 (30 log-spaced time steps),
 │                  LCDM_high_log_s1234, nDGP_N1.2_high_log_s1234 (100 log-spaced time steps),
-│                  <LCDM|nDGP_N1.0>_steps<N>_zini<z>_mesh<m>[_pofk<p>]_s1234[-fixed|-fixed-inv] (resolution tests)   (.lua)
+│                  <LCDM|nDGP_N1.0>_steps<N>_zini<z>_mesh<m>[_pofk<p>]_s1234[-fixed|-fixed-inv] (resolution tests),
+│                  LCDM_steps<30|50>_zini19_mesh<2|3>_ph3000 (resolution tests with the ICs of the Abacus box: its white
+│                  noise, jobs/white_noise_abacus.sh, and Abacus's initial P(k) at z = 99; Notebooks/3test_ph3000.ipynb)   (.lua)
 └── standalone/    runs not matched to a reference, kept as examples:
     ├── cuGal.lua                               cubic Galileon through the frontend (gravity_model = "HiCOLA")
     └── nDGP_action.lua                         nDGP from its Horndeski action through the frontend
@@ -612,6 +614,7 @@ imports:
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs with the Abacus HMF (LCDM) and their ratio | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
 | `3test.ipynb` | resolution tests on Abacus_Small (LCDM, z = 0.5): number of time steps, a paired-fixed pair of the 100-step base as reference, z_ini at 50 and 30 steps, force mesh 3N vs 2N at 50 and 30 steps, the nDGP N1.0 MG boost of P(k) and HMF against the number of time steps; P(k) and HMF against the Abacus box and the base run of each test, and a table of costs (wall time, node hours) and P(k) deviation from the Abacus box read from the backend logs and measurements | backend job id of each simulation, runs (realizations averaged), tests (runs, base first) |
+| `3test_ph3000.ipynb` | resolution tests on Abacus_Small with the initial conditions of the Abacus box (realization `ph3000`: its white noise, Abacus's initial P(k) at z = 99), LCDM, z = 0.5, z_ini = 19, PCS: 50 and 30 time steps × force mesh 3N and 2N; P(k) and HMF against the Abacus box and the 50-step 3N run, and a table of costs and P(k) deviation from the Abacus box | backend job id of each run (base first) |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
 | `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, `hod_fit` and `hod_fit_model` (as in `hod_mock.sh`: each model's own fit or one model's fit for both), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |
