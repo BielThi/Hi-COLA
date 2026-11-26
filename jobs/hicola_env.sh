@@ -59,7 +59,7 @@ hicola_print_env() {
 hicola_print_run() {
     echo "Run file:       $1"
     echo "Run:            $RUN_LABEL  (simulation_name = $SIM_NAME)"
-    echo "Box:            $BOXSIZE Mpc/h, ${NPART}^3 particles, $NSTEPS time steps from z = $Z_INIT"
+    echo "Box:            $BOXSIZE Mpc/h, ${NPART}^3 particles, $NSTEPS time steps ($TIMESTEP_SPACING in a) from z = $Z_INIT"
     echo "Gravity:        $GRAVITY"
     echo "Cosmology:      $COSMOLOGY"
     echo "Initial P(k):   $IC_FILE"

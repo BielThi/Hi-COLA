@@ -10,6 +10,7 @@
 #SBATCH --partition=academic
 # FoF halo finding on one snapshot of a Hi-COLA run, then the HMF and the HODDIES halo array
 # (halos_fof_hoddies.npy, Rh comoving), then copy the HMF to $HICOLA_DATA_ROOT/hicola/.
+# A run file given on the command line replaces RUN_FILE:  sbatch jobs/halo_finder.sh <run.lua>
 # With PARTICLE_FRACTION > 0 it also keeps a random subsample of the halo member particles
 # (halos_fof_particles.npy, same halo_id as the catalog), for the HOD fits with SATELLITES="particles".
 #
@@ -19,7 +20,7 @@
 
 # ---------------------------- user parameters ----------------------------
 # Run file of the simulation to process, relative to the Hi-COLA folder (or absolute)
-RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/nDGP_N1.2_s1234.lua"
+RUN_FILE="HiCOLA/Parameter_files/Backend_parameter_files/Abacus_Small/LCDM_high_s1234.lua"
 # Output redshift of the snapshot to process
 REDSHIFT="0.500"
 
@@ -53,6 +54,9 @@ if [ ! -f "$HICOLA_ROOT/jobs/hicola_env.sh" ]; then
     echo "Cannot find the Hi-COLA folder (looked in $HICOLA_ROOT)" >&2
     exit 1
 fi
+# A run file given on the command line is relative to where you submitted; RUN_FILE above is
+# relative to the Hi-COLA folder
+if [ $# -ge 1 ]; then RUN_FILE=$(cd "${SLURM_SUBMIT_DIR:-$PWD}" && readlink -f "$1"); fi
 source "$HICOLA_ROOT/jobs/hicola_env.sh"
 cd "$HICOLA_ROOT"
 RUN_FILE=$(readlink -f "$RUN_FILE")

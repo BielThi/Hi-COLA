@@ -74,7 +74,10 @@ def reference_ratio(sim: str, model_num: str, model_den: str, redshift: float, k
 
 def hicola_measurement_file(target: str, model: str, realization: str, redshift: float, kind: str) -> Path:
     """The run's own file on scratch if it is still there, otherwise the kept copy."""
-    run_file = (hp.pofk_file if kind == "PS" else hp.hmf_file)(target, model, realization, redshift)
+    if kind.startswith("PS_"):   # P(k) with another density assignment method (jobs/pofk_snapshot.sh)
+        run_file = hp.pofk_method_file(target, model, realization, redshift, kind[3:])
+    else:
+        run_file = (hp.pofk_file if kind == "PS" else hp.hmf_file)(target, model, realization, redshift)
     kept_file = hp.hicola_file(target, model, realization, redshift, kind)
     for path in (run_file, kept_file):
         if path.exists():
@@ -83,6 +86,7 @@ def hicola_measurement_file(target: str, model: str, realization: str, redshift:
         f"No {kind} for {target}/{model}/{realization} at z={redshift:.3f}: neither {run_file} nor "
         f"{kept_file} exists. Run jobs/backend.sh"
         + (" and jobs/halo_finder.sh" if kind == "HMF" else "")
+        + (" and jobs/pofk_snapshot.sh" if kind.startswith("PS_") else "")
         + f" on {hp.run_file(target, model, realization)}."
     )
 

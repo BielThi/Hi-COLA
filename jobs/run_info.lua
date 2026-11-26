@@ -8,6 +8,7 @@
 --                  RUN_ROOT = output_folder without /<target>/<model>/<realization>/
 --   NPART NSTEPS Z_INIT GRAVITY COSMOLOGY IC_FILE IC_SEED IC_FIXED IC_INVERTED   (for the job logs)
 --   COSMO_H COSMO_OMEGA_CDM COSMO_OMEGA_B COSMO_OMEGA_MNU COSMO_OMEGA_LAMBDA COSMO_TCMB COSMO_NEFF COSMO_NS   (numbers)
+--   POFK_NMESH POFK_METHOD POFK_INTERLACING POFK_SUBTRACT_SHOTNOISE   (Hi-COLA's P(k) settings, for jobs/pofk_snapshot.sh)
 --
 -- Fails if simulation_name or output_folder do not follow that naming: the halo finder and
 -- scripts/collect_products.py find a run's outputs by these names.
@@ -64,6 +65,7 @@ local steps = {}
 for i, n in ipairs(timestep_nsteps or {}) do steps[i] = tostring(n) end
 info.NPART = particle_Npart_1D
 info.NSTEPS = table.concat(steps, " + ")
+info.TIMESTEP_SPACING = timestep_scalefactor_spacing or "linear (Hi-COLA default)"
 info.Z_INIT = ic_initial_redshift
 info.GRAVITY = gravity_model
 if gravity_model == "DGP" then
@@ -85,10 +87,15 @@ info.IC_FILE = ic_input_filename
 info.IC_SEED = ic_random_seed
 info.IC_FIXED = ic_fix_amplitude
 info.IC_INVERTED = ic_reverse_phases
+info.POFK_NMESH = pofk_nmesh
+info.POFK_METHOD = pofk_density_assignment_method
+info.POFK_INTERLACING = pofk_interlacing
+info.POFK_SUBTRACT_SHOTNOISE = pofk_subtract_shotnoise
 
 for _, key in ipairs({ "RUN_LABEL", "TARGET", "MODEL", "REALIZATION", "SIM_NAME", "OUTPUT_FOLDER", "RUN_ROOT", "BOXSIZE",
-                       "REDSHIFTS", "NPART", "NSTEPS", "Z_INIT", "GRAVITY", "COSMOLOGY", "IC_FILE", "IC_SEED",
+                       "REDSHIFTS", "NPART", "NSTEPS", "TIMESTEP_SPACING", "Z_INIT", "GRAVITY", "COSMOLOGY", "IC_FILE", "IC_SEED",
                        "IC_FIXED", "IC_INVERTED", "COSMO_H", "COSMO_OMEGA_CDM", "COSMO_OMEGA_B",
-                       "COSMO_OMEGA_MNU", "COSMO_OMEGA_LAMBDA", "COSMO_TCMB", "COSMO_NEFF", "COSMO_NS" }) do
+                       "COSMO_OMEGA_MNU", "COSMO_OMEGA_LAMBDA", "COSMO_TCMB", "COSMO_NEFF", "COSMO_NS",
+                       "POFK_NMESH", "POFK_METHOD", "POFK_INTERLACING", "POFK_SUBTRACT_SHOTNOISE" }) do
   print(key .. "=" .. quote(info[key]))
 end

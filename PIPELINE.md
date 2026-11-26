@@ -226,7 +226,7 @@ P(k)) and named by a **model** and a **realization**:
 | | values |
 |---|---|
 | target | `COLA_NM4096`: 1024 Mpc/h, 1024³ particles, Euclid cosmology, Bart's initial P(k), z_init 19, outputs z = 1.65, 1.4, 1.2, 1.0 · `Abacus_Small`: 500 Mpc/h, 1024³ particles, AbacusSummit c000 cosmology, its initial P(k), z_init 49, outputs z = 1.1, 0.8, 0.5. Both 30 time steps |
-| model | `LCDM` (`gravity_model = "GR"`) · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = `gravity_model = "DGP"` with `gravity_model_dgp_rcH0overc = 1.2` (Hi-COLA's built-in DGP) · suffix `_high` = 100 time steps instead of 30, e.g. `LCDM_high`, `nDGP_N1.2_high` |
+| model | `LCDM` (`gravity_model = "GR"`) · `nDGP_N<rcH0>`, e.g. `nDGP_N1.2` = `gravity_model = "DGP"` with `gravity_model_dgp_rcH0overc = 1.2` (Hi-COLA's built-in DGP) · suffix `_high` = 100 time steps instead of 30, e.g. `LCDM_high`, `nDGP_N1.2_high` · suffix `_log` = time steps log-spaced in a (`timestep_scalefactor_spacing = "logarithmic"`) instead of linear, after `_high` when both, e.g. `LCDM_log`, `nDGP_N1.2_high_log` · resolution tests (`Notebooks/3test.ipynb`): `LCDM_steps<N>_zini<z>_mesh<m>` (and `nDGP_N1.0_steps<N>_zini<z>_mesh<m>`, `gravity_model = "DGP"`) = N time steps, `ic_initial_redshift = z`, `force_nmesh = m * particle_Npart_1D`, a single output at z = 0.5, with `_pofk<p>` when `pofk_nmesh = p * particle_Npart_1D` instead of `force_nmesh` |
 | realization | `s<seed>` · `s<seed>-fixed` (`ic_fix_amplitude = true`) · `s<seed>-fixed-inv` (also `ic_reverse_phases = true`); the pair -fixed / -fixed-inv is averaged as "paired-fixed" |
 
 ```
@@ -240,7 +240,10 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 │                  nDGP_N1.2_s1234, nDGP_N1.2_s1234-fixed, nDGP_N1.2_s1234-fixed-inv   (.lua)
 ├── Abacus_Small/  the same six + nDGP_N1.0_s1234 + nDGP_N3.0_s1234 + the same six with seed 4321: LCDM_s4321, LCDM_s4321-fixed, LCDM_s4321-fixed-inv,
 │                  nDGP_N1.2_s4321, nDGP_N1.2_s4321-fixed, nDGP_N1.2_s4321-fixed-inv,
-│                  LCDM_high_s1234, nDGP_N1.2_high_s1234 (100 time steps)   (.lua)
+│                  LCDM_high_s1234, nDGP_N1.2_high_s1234 (100 time steps),
+│                  LCDM_log_s1234, nDGP_N1.2_log_s1234 (30 log-spaced time steps),
+│                  LCDM_high_log_s1234, nDGP_N1.2_high_log_s1234 (100 log-spaced time steps),
+│                  <LCDM|nDGP_N1.0>_steps<N>_zini<z>_mesh<m>[_pofk<p>]_s1234[-fixed|-fixed-inv] (resolution tests)   (.lua)
 └── standalone/    runs not matched to a reference, kept as examples:
     ├── cuGal.lua                               cubic Galileon through the frontend (gravity_model = "HiCOLA")
     └── nDGP_action.lua                         nDGP from its Horndeski action through the frontend
@@ -249,7 +252,7 @@ HiCOLA/Parameter_files/Backend_parameter_files/
 Every run file is a complete Hi-COLA parameter file, like the original template: every
 setting is written in it. Within a target, the files differ only in `simulation_name`,
 `output_folder`, `gravity_model` (and `gravity_model_dgp_rcH0overc`), `ic_random_seed`,
-`ic_fix_amplitude` and `ic_reverse_phases` (and `timestep_nsteps` for the `_high` models). Input paths (initial P(k), frontend tables) are
+`ic_fix_amplitude` and `ic_reverse_phases` (and `timestep_nsteps` for the `_high` models, `timestep_scalefactor_spacing` for the `_log` models). Input paths (initial P(k), frontend tables) are
 relative to the Hi-COLA folder, where the jobs run `nbody`. Some values are Lua expressions
 of others, as in the template (e.g. `force_nmesh = 3 * particle_Npart_1D`), so changing the
 particle number also changes those.
@@ -294,6 +297,7 @@ on the command line.
 |---|---|---|---|
 | `backend.sh` | `RUN_FILE` | 8 nodes, 512 tasks, 6 GB/task, 5 h, exclusive | `sbatch jobs/backend.sh` |
 | `halo_finder.sh` | `RUN_FILE`, `REDSHIFT`, `LINKING_LENGTH`, `NMIN`, `MDEF`, `PARTICLE_FRACTION`, `PARTICLE_SEED`, `HMF_MASS_GRID` | 8 nodes, 512 tasks, 6 GB/task, 4.5 h | `sbatch jobs/halo_finder.sh` |
+| `pofk_snapshot.sh` | `RUN_FILE`, `REDSHIFT`, `METHODS` | 4 nodes, 256 tasks, 6 GB/task, 2 h | `sbatch jobs/pofk_snapshot.sh` (build once: `make -C scripts/pofk_snapshot`, hicola env) |
 | `hod_mock.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_FIT`, `HOD_FIT_MODEL`, `TRACER`, `SATELLITES`, `SEEDS`, `NTHREADS`, `LOS`, `MESHSIZE`, `ELLS`, `K_STEP`, `MARK_RCUT`, `MARK_COEFFICIENTS` | 1 task, 32 threads, 6 GB/thread, 1 h | `sbatch jobs/hod_mock.sh` |
 | `hod_fit.sh` | `RUN_FILE`, `REDSHIFT`, `HOD_PARAM_FILE`, `TRACER`, `PRIORS`, `SATELLITES`, `DATA_RPPI`, `DATA_SMU`, `STATISTICS`, `RP_REBIN`, `RP_RANGE`, `PIMAX`, `ELLS`, `S_REBIN`, `S_RANGE`, `CORRELATION`, `CORRELATION_STATISTICS`, `HARTLAP_NREAL`, `FIT_R_MIN`, `FIT_R_MAX`, `DATA_VECTOR`, `LOS`, `MOCK_SEED`, `MODEL_SEEDS`, `REFERENCE_PARAM_FILE`, `METHOD`, `MAXITER`, `POPSIZE`, `XTOL`, `START`, `START_SEED` | 1 node, 18 MPI ranks x 4 threads, 3 GB/thread, 4 h | `sbatch jobs/hod_fit.sh` |
 | `power_spectrum_abacus.sh` | `REDSHIFT`, `MODEL`, `LOAD_A`, `LOAD_B`, `NMESH`, `KBINS` | 1 task, 16 threads, 40 GB, 1.5 h | `sbatch jobs/power_spectrum_abacus.sh` |
@@ -306,6 +310,8 @@ sbatch jobs/backend.sh <run.lua>                              # a run file on th
 sbatch -N 2 -n 128 --time=1:00:00 jobs/backend.sh             # other resources
 sbatch --job-name=LCDM_s1234 jobs/backend.sh                  # other job name (= log file name)
 sbatch --dependency=afterok:<backend job id> jobs/halo_finder.sh   # start once the backend is done
+sbatch jobs/halo_finder.sh <run.lua>                          # a run file on the command line replaces RUN_FILE
+sbatch jobs/pofk_snapshot.sh <run.lua>                        # P(k) of the snapshot with the METHODS density assignments
 ```
 
 Settings used so far, per target (set them in `halo_finder.sh` for each submission):
@@ -326,8 +332,8 @@ Settings used so far, per target (set them in `halo_finder.sh` for each submissi
   particles, steps, z_init, gravity, cosmology, initial P(k), seed, fixed/inverted, output
   redshifts and output folder; for the halo finder also the FoF settings and HMF mass grid;
   for the Abacus P(k) its settings, input and output paths; for the frontend the `.ini` files.
-- **Kept results**: at the end of the backend, halo-finder and HOD-mock jobs,
-  `scripts/collect_products.py` copies the P(k), HMF and HOD galaxy P(k) and marked P(k) of each output redshift to
+- **Kept results**: at the end of the backend, halo-finder, P(k)-on-snapshot and HOD-mock jobs,
+  `scripts/collect_products.py` copies the P(k) (also `PS_<method>`), HMF and HOD galaxy P(k) and marked P(k) of each output redshift to
   `hicola_data/hicola/` (section 8). It can be rerun by hand:
   `python scripts/collect_products.py <target> <model> <realization>`.
 - `lua jobs/run_info.lua <run.lua>` (env active) prints a run's identity and settings, or the
@@ -424,6 +430,14 @@ hicola_data/hicola/<target>/<model>/<realization>/HiCOLA_<target>_<model>_<reali
   **comoving** kpc/h: nbodykit's radius is physical, HODDIES places satellites in comoving units
   (like Abacus' comoving `r98`), so `Rh = r_halo (1+z)`. Arrays made before 2026-10-26 had the physical radii (satellites 1+z
   too close to their halo's centre).
+- **P(k) with another density assignment** `pofk_<method>_z<z>.txt` in the snapshot folder
+  (`jobs/pofk_snapshot.sh`, program `scripts/pofk_snapshot/`), kept as
+  `HiCOLA_<simulation_name>_z<z>_PS_<method>.txt` (kind `PS_<method>`): Hi-COLA's own estimator
+  (FML `compute_power_spectrum`, the function nbody calls for `pofk_z<z>.txt`) run afterwards on the
+  Gadget snapshot with the run's `pofk_nmesh`, `pofk_interlacing` and `pofk_subtract_shotnoise`,
+  only the method changed (NGP, CIC, TSC, PCS, PQS). Columns k [h/Mpc] (mean |k| of the modes of the
+  bin), P(k) [(Mpc/h)³]. The job also measures the run's own method and prints its difference to
+  `pofk_z<z>.txt`.
 - **Member particles** `halos_fof_particles.npy` (`jobs/halo_finder.sh` with `PARTICLE_FRACTION > 0`):
   a random subsample (fraction `PARTICLE_FRACTION`, seed `PARTICLE_SEED`) of the particles of every
   halo, `x y z` [Mpc/h], `vx vy vz` [peculiar km/s], `halo_id` = row of the halo catalog of the same
@@ -510,10 +524,18 @@ imports:
   `load_hicola` reads the run folder on scratch, or the kept copy in `hicola_data/hicola/` once
   scratch has been cleaned up. `boxes=None` means every `Box<n>` folder that exists.
 
+- `slides`, slide versions of the figures (LaTeX beamer, 4:3 frame). Every figure is shown with
+  `slides.show(fig, name, slide)`, and the plotting functions take `slide=` too; with
+  `slide=True` the figure, as shown in the notebook, is also saved as `Notebooks/slides/<name>.pdf`
+  and `.png` (not in git), scaled as a whole (aspect ratio and proportions kept) to fit in
+  `slides.SLIDE_SIZE` (4.7 x 3.1 in); the printed message gives the scale factor. Include it at its
+  natural size, `\includegraphics{slides/<name>.pdf}`.
+
 | notebook | what it does | parameters (top cell) |
 |---|---|---|
 | `compare_COLA_NM4096.ipynb` | P(k) and HMF against Bart's boxes (mean ± 1σ), nDGP/LCDM ratios, (P − mean)/σ | redshift, models, runs (label → realizations averaged), reference boxes, M_min, y-range |
 | `compare_Abacus_Small.ipynb` | P(k) against the Abacus box (LCDM), nDGP/LCDM, HMFs with the Abacus HMF (LCDM) and their ratio | redshift, models (e.g. nDGP_N1.2 or N1.0), runs, reference boxes, k_max, M_min, y-range |
+| `3test.ipynb` | resolution tests on Abacus_Small (LCDM, z = 0.5): number of time steps, a paired-fixed pair of the 100-step base as reference, z_ini at 50 and 30 steps, force mesh 3N vs 2N at 50 and 30 steps, the nDGP N1.0 MG boost of P(k) and HMF against the number of time steps; P(k) and HMF against the Abacus box and the base run of each test, and a table of costs (wall time, node hours) and P(k) deviation from the Abacus box read from the backend logs and measurements | backend job id of each simulation, runs (realizations averaged), tests (runs, base first) |
 | `LRG_Abacus_Small.ipynb` | LRG mocks (HODDIES) on the paired-fixed Abacus_Small runs: P(k), bias b²(k), centrals only, RSD multipoles | in its cells |
 | `marked.ipynb` | S_X(k) = ⟨X_nDGP⟩/⟨X_GR⟩ − 1 for X = P₀, P₂ of the HOD galaxy P(k), then for the marked M₀, M₂, averaged over seeds (`hod_mock.sh`; checks all seeds and models use the same mark) | target, redshift, realization, `hod_fit` and `hod_fit_model` (as in `hod_mock.sh`: each model's own fit or one model's fit for both), seeds, models, ells, dk (rebinning), k_max, show_seeds; curve = ratio of the seed means, band = std/√N of the per-seed S_X |
 | `HOD.ipynb`, `HOD_Abacus.ipynb` | HODDIES mocks on one run; box size read from the halo catalog | target, model, realization, redshift; HOD in `HOD_parameter_file_z<z>.yaml` |

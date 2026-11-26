@@ -4,12 +4,13 @@
 For every snapshot_<simulation_name>_z<z>/ of the run it copies, when present:
 
     pofk_z<z>.txt                    -> HiCOLA_<simulation_name>_z<z>_PS.txt
+    pofk_<method>_z<z>.txt           -> HiCOLA_<simulation_name>_z<z>_PS_<method>.txt   (jobs/pofk_snapshot.sh)
     halo_catalog/halos_fof_hmf.txt   -> HiCOLA_<simulation_name>_z<z>_HMF.txt   (+ .json)
     halo_catalog/hod/<name>_PS.txt   -> HiCOLA_<simulation_name>_z<z>_HOD_<name>_PS.txt   (+ .h5, .json)
     halo_catalog/hod/<name>_MPS.txt  -> HiCOLA_<simulation_name>_z<z>_HOD_<name>_MPS.txt  (+ .h5, .json)
 
 Scratch is cleaned up automatically; these copies are the ones to keep. Called at the end of
-jobs/backend.sh, jobs/halo_finder.sh and jobs/hod_mock.sh, and safe to rerun.
+jobs/backend.sh, jobs/halo_finder.sh, jobs/hod_mock.sh and jobs/pofk_snapshot.sh, and safe to rerun.
 
     python scripts/collect_products.py Abacus_Small nDGP_N1.2 s1234-fixed
 """
@@ -49,6 +50,7 @@ def main() -> int:
         sources = {
             "PS": [hp.pofk_file(*run, redshift)],
             "HMF": [hp.hmf_file(*run, redshift), hp.hmf_file(*run, redshift).with_suffix(".txt.json")],
+            **{f"PS_{method}": [hp.pofk_method_file(*run, redshift, method)] for method in hp.POFK_METHODS},
         }
         for kind, files in sources.items():
             if not files[0].exists():

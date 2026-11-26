@@ -9,7 +9,9 @@ Three roots, each overridable with an environment variable (see jobs/hicola_env.
 A run is identified by (target, model, realization), e.g. ("Abacus_Small", "nDGP_N1.2", "s1234-fixed"):
 
     target       reference simulation the run is matched to: COLA_NM4096 | Abacus_Small
-    model        LCDM | nDGP_N<rcH0>, optionally with _high (100 time steps instead of 30)
+    model        LCDM | nDGP_N<rcH0>, optionally with _high (100 time steps instead of 30) and/or _log
+                 (time steps log-spaced in a instead of linear), in that order: e.g. LCDM_high_log;
+                 resolution tests: LCDM_steps<N>_zini<z>_mesh<m>[_pofk<p>] (see PIPELINE.md)
     realization  s<seed>[-fixed[-inv]]
 
 Its Lua file is HiCOLA/Parameter_files/Backend_parameter_files/<target>/<model>_<realization>.lua,
@@ -19,7 +21,9 @@ Hi-COLA writes its own file names there.
 
 Reference measurements live in $HICOLA_DATA_ROOT/reference/<sim>/<model>/Box<n>/ and the kept
 Hi-COLA measurements in $HICOLA_DATA_ROOT/hicola/<target>/<model>/<realization>/, both named
-<prefix>_z<z>_<kind>.txt with kind PS (matter power spectrum) or HMF (halo mass function).
+<prefix>_z<z>_<kind>.txt with kind PS (matter power spectrum) or HMF (halo mass function), or
+PS_<method> (P(k) measured afterwards on the snapshot with another density assignment method,
+jobs/pofk_snapshot.sh).
 """
 
 from __future__ import annotations
@@ -39,7 +43,9 @@ BACKEND_PARAM_DIR = HICOLA_ROOT / "HiCOLA" / "Parameter_files" / "Backend_parame
 FRONTEND_PARAM_DIR = HICOLA_ROOT / "HiCOLA" / "Parameter_files" / "Frontend_parameter_files"
 NOTEBOOK_DIR = HICOLA_ROOT / "Notebooks"
 
-KINDS = ("PS", "HMF")
+# Density assignment methods of Hi-COLA's P(k) estimator (FML); kind PS_<method> = jobs/pofk_snapshot.sh
+POFK_METHODS = ("NGP", "CIC", "TSC", "PCS", "PQS")
+KINDS = ("PS", "HMF") + tuple(f"PS_{method}" for method in POFK_METHODS)
 
 
 def zlabel(redshift: float) -> str:
@@ -74,6 +80,13 @@ def snapshot_glob(target: str, model: str, realization: str, redshift: float) ->
 def pofk_file(target: str, model: str, realization: str, redshift: float) -> Path:
     """P(k) Hi-COLA measures on the snapshot at an output redshift."""
     return snapshot_dir(target, model, realization, redshift) / f"pofk_{zlabel(redshift)}.txt"
+
+
+def pofk_method_file(target: str, model: str, realization: str, redshift: float, method: str) -> Path:
+    """P(k) measured afterwards on the snapshot with density assignment `method` (jobs/pofk_snapshot.sh)."""
+    if method not in POFK_METHODS:
+        raise ValueError(f"method must be one of {POFK_METHODS}, got {method!r}")
+    return snapshot_dir(target, model, realization, redshift) / f"pofk_{method}_{zlabel(redshift)}.txt"
 
 
 def pofk_cb_file(target: str, model: str, realization: str, redshift: float) -> Path:
